@@ -1,0 +1,5 @@
+Aug 18 14:32:10 host1 sshd[1234]: Failed password for admin from 192.168.1.101 port 22 ssh2
+Aug 18 14:35:45 host2 wget[5678]: File downloaded: payload.exe from 192.168.1.102
+Aug 18 14:40:05 host3 kernel: [12345.67] Port scan detected from 203.0.113.55 on ports 22,80,443
+Aug 18 15:01:22 host4 sudo[9101]: pam_unix(sudo:auth): authentication failure; user=root
+Aug 18 15:15:50 host5 sshd[1122]: Accepted password for student from 192.168.1.105 port 22 ssh2

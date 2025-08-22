@@ -1,0 +1,6 @@
+timestamp,src_ip,dst_ip,event,username,status
+2025-08-18T14:32:10Z,192.168.1.101,10.0.0.5,Failed SSH login,admin,failed
+2025-08-18T14:35:45Z,192.168.1.102,10.0.0.8,File downloaded,,success
+2025-08-18T14:40:05Z,203.0.113.55,10.0.0.10,Port scan detected,,suspicious
+2025-08-18T15:01:22Z,198.51.100.23,10.0.0.12,Privilege escalation attempt,root,critical
+2025-08-18T15:15:50Z,192.168.1.105,10.0.0.15,User login,student,success

@@ -1,0 +1,9 @@
+# 📄 **requirements.txt**
+fastapi
+uvicorn
+pandas
+scikit-learn
+pyod
+matplotlib
+plotly
+requests
