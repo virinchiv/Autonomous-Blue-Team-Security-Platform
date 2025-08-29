@@ -13,9 +13,32 @@ class LogParser:
             return df.to_dict(orient="records")
         elif filepath.endswith(".log") or filepath.endswith(".txt"):
             with open(filepath, "r") as f:
-                return [self._parse_syslog(line) for line in f.readlines()]
+                lines = f.readlines()
+                # Check if this is a Zeek connection log by looking at the header
+                if lines and 'id.orig_h' in lines[0] and 'id.resp_h' in lines[0]:
+                    return self._parse_zeek_conn_log(lines)
+                else:
+                    return [self._parse_syslog(line) for line in lines]
         else:
             raise ValueError("Unsupported log format")
+    
+    def _parse_zeek_conn_log(self, lines: list[str]) -> list[dict]: 
+        """Parses a list of lines from a Zeek conn.log file."""
+        header = lines[0].strip().split('\t')
+        parsed_logs = []
+        for line in lines[1:]:
+            if line.startswith("#") or not line.strip(): continue
+            values = line.strip().split('\t')
+            log_dict = dict(zip(header, values))
+            for key in ['id.orig_p', 'id.resp_p', 'duration', 'orig_bytes', 'resp_bytes']:
+                if log_dict.get(key) and log_dict[key] != '-':
+                    log_dict[key] = float(log_dict[key])
+                else:
+                    log_dict[key] = 0
+            log_dict['ts'] = float(log_dict['ts'])
+            parsed_logs.append(log_dict)
+        return parsed_logs
+
 
     def _parse_syslog(self, line: str): 
         syslog_pattern = (
