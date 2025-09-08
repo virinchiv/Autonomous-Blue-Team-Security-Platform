@@ -1,0 +1,10 @@
+/data/CICIDS
+/logs
+/data
+/data
+data/test_conn.log
+flow_prediction_results.csv
+data/test_conn.log
+flow_prediction_results.csv
+*.csv
+/__pycache__
