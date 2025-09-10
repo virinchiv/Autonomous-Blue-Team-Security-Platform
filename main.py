@@ -6,7 +6,7 @@ from transformers import AutoTokenizer
 from mystressed import STRESSED
 
 # --- Model and Device Configuration (Mac Friendly) ---
-model_name = "EleutherAI/gpt-neo-2.7B" # A larger model with better context handling
+model_name = "EleutherAI/gpt-neo-1.3B" # A larger model that should handle longer contexts
 log_type = "web server"
 prompt_template_path = "security-prompt.txt"
 
@@ -62,7 +62,7 @@ except FileNotFoundError:
 # Start the analysis!
 results = parser.analyze_logs(
     logs,
-    chunk_size=2,      # How many lines to analyze at once (reduced for token limits).
+    chunk_size=1,      # How many lines to analyze at once (minimized for token limits).
     format_output=True # Set to True to print pretty reports
 )
 

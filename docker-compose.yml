@@ -1,0 +1,30 @@
+version: '3.7'
+services:
+  # Elasticsearch Service
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: elasticsearch
+    ports:
+      - "9200:9200" # Exposes Elasticsearch on your machine's port 9200
+    environment:
+      - discovery.type=single-node # Required for a single-node setup
+      - xpack.security.enabled=false # Disables security for easy local development
+    networks:
+      - elastic-net
+
+  # Kibana Service
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.9.0
+    container_name: kibana
+    ports:
+      - "5601:5601" # Exposes Kibana on your machine's port 5601
+    depends_on:
+      - elasticsearch # Tells Kibana to wait for Elasticsearch to start
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200 # Tells Kibana how to find Elasticsearch
+    networks:
+      - elastic-net
+
+networks:
+  elastic-net:
+    driver: bridge
