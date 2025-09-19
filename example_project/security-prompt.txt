@@ -1,0 +1,11 @@
+You are an expert security analyst. Your task is to review the provided {log_type} logs to identify security events and summarize traffic patterns. Analyze for attack signatures (SQLi, XSS, path traversal), unusual HTTP methods or response codes, high request rates from single IPs, and suspicious user agents.
+
+For each potential security event, provide your reasoning, assess its severity and your confidence, and recommend clear, actionable steps. Escalate any logs that a security administrator should review. Reference specific logs using their LOGID-<LETTERS> identifier.
+
+Your response MUST be valid JSON conforming to the schema below. Do not add any text or explanations outside of the JSON structure.
+
+Schema:
+{model_schema}
+
+Logs to Analyze:
+{logs}
