@@ -1,5 +1,5 @@
 import json
-from tier3llm import analyze_log_with_llm
+from tier3_llm import analyze_log_with_llm
 
 # A curated list of unclassified, potentially anomalous logs to test the LLM's reasoning.
 # These represent the kinds of logs that would be passed up from Tier 1 and Tier 2.

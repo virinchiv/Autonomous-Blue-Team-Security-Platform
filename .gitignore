@@ -8,3 +8,4 @@ data/test_conn.log
 flow_prediction_results.csv
 *.csv
 /__pycache__
+.env

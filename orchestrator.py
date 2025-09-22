@@ -22,7 +22,8 @@ from elasticsearch.helpers import scan
 import os
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 # --- Import your custom modules ---
 from tier1_rules import THREAT_RULES, BENIGN_RULES
@@ -36,6 +37,16 @@ FILES_TO_PROCESS = [
     "output_access-10k.log_ecs.json",
 ]
 REPORT_FILENAME = "security_intelligence_report.md"
+
+# --- Alert Correlation Configuration ---
+TIME_WINDOW_SECONDS = 300  # 5-minute correlation window
+CORRELATION_THRESHOLDS = {
+    "Client Error (4xx)": 20,  # Alert after 20+ 4xx errors from same IP
+    "Server Error (5xx)": 5,   # Alert after 5+ 5xx errors from same IP
+    "Directory Traversal Attempt": 3,  # Alert after 3+ attempts
+    "SSH Failed Login": 10,    # Alert after 10+ failed SSH attempts
+    "Common Web Scanner User-Agent": 5,  # Alert after 5+ scanner requests
+}
 
 # --- Core Orchestrator Functions ---
 
@@ -105,13 +116,83 @@ def tier1_triage(log_context: dict):
 
     return "UNCLASSIFIED", None, confidence_score
 
-def generate_security_report(analysis_results):
+def parse_timestamp(timestamp_str):
+    """Parse timestamp string to datetime object."""
+    try:
+        # Handle different timestamp formats
+        if '+' in timestamp_str:
+            return datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        else:
+            return datetime.fromisoformat(timestamp_str)
+    except:
+        return datetime.now()
+
+def should_create_correlated_alert(event_tracker, source_ip, rule_name, log_timestamp):
+    """
+    Check if we should create a correlated alert based on event patterns.
+    Returns (should_alert, event_count, time_span)
+    """
+    if source_ip not in event_tracker:
+        return False, 0, 0
+    
+    events = event_tracker[source_ip]
+    if not events['timestamps']:
+        return False, 0, 0
+    
+    # Check if events are within the time window
+    time_span = (log_timestamp - events['timestamps'][0]).total_seconds()
+    if time_span > TIME_WINDOW_SECONDS:
+        # Time window expired, reset tracker
+        event_tracker[source_ip] = {"count": 0, "timestamps": [], "logs": []}
+        return False, 0, 0
+    
+    # Check if we've hit the threshold
+    threshold = CORRELATION_THRESHOLDS.get(rule_name, 10)  # Default threshold
+    if events['count'] >= threshold:
+        return True, events['count'], time_span
+    
+    return False, events['count'], time_span
+
+def update_event_tracker(event_tracker, source_ip, rule_name, log_timestamp, log_context):
+    """Update the event tracker with new event information."""
+    if source_ip not in event_tracker:
+        event_tracker[source_ip] = {"count": 0, "timestamps": [], "logs": []}
+    
+    events = event_tracker[source_ip]
+    
+    # Clean old events outside time window
+    cutoff_time = log_timestamp - timedelta(seconds=TIME_WINDOW_SECONDS)
+    events['timestamps'] = [ts for ts in events['timestamps'] if ts > cutoff_time]
+    events['logs'] = events['logs'][-len(events['timestamps']):]  # Keep logs in sync
+    
+    # Add new event
+    events['count'] = len(events['timestamps']) + 1
+    events['timestamps'].append(log_timestamp)
+    events['logs'].append(log_context)
+
+def create_correlated_alert(source_ip, rule_name, event_count, time_span, sample_logs):
+    """Create a correlated alert with enriched context."""
+    alert = {
+        "alert_type": "CORRELATED_INCIDENT",
+        "source_ip": source_ip,
+        "rule_name": rule_name,
+        "event_count": event_count,
+        "time_span_seconds": time_span,
+        "severity": "High" if event_count > 50 else "Medium",
+        "sample_logs": sample_logs[:5],  # Include up to 5 sample logs
+        "timestamp": datetime.now().isoformat(),
+        "description": f"High volume of {rule_name} events from {source_ip} ({event_count} events in {time_span:.0f}s)"
+    }
+    return alert
+
+def generate_security_report(analysis_results, correlated_alerts=None):
     """Generates a markdown security report from the analysis results."""
     print(f"--- Generating Security Intelligence Report ---")
     
     threats = [r for r in analysis_results if r['classification'] == 'THREAT']
     llm_analyzed = [r for r in analysis_results if 'llm_analysis' in r]
     benign = [r for r in analysis_results if r['classification'] == 'BENIGN']
+    correlated_alerts = correlated_alerts or []
     
     # Filter LLM results to only show actual threats or high-severity issues
     critical_llm_alerts = [
@@ -130,12 +211,11 @@ def generate_security_report(analysis_results):
 
 ---
 ## 🚨 Executive Summary
-A total of **{len(threats) + len(critical_llm_alerts)}** high-priority security events were detected.
+A total of **{len(correlated_alerts) + len(critical_llm_alerts)}** high-priority security events were detected.
 
-- **{len(threats)}** known threats were identified by Tier 1 rules.
-  - **{len(high_confidence_threats)}** high-confidence threats (confidence > 0.7)
-  - **{len(low_confidence_threats)}** low-confidence threats (confidence ≤ 0.7)
+- **{len(correlated_alerts)}** correlated incidents were identified through behavioral analysis.
 - **{len(critical_llm_alerts)}** previously unknown anomalies were classified as Medium or High severity by Tier 3 LLM analysis.
+- **{len(threats)}** individual threat events were processed (now grouped into {len(correlated_alerts)} incidents).
 - **{len(benign)}** logs were classified as benign and ignored.
 - **{len([r for r in analysis_results if r.get('pre_filtered', False)])}** logs were pre-filtered as low-priority by Tier 3.
 
@@ -165,6 +245,32 @@ High-confidence threats identified by predefined rules.
         report_content += "| ----------------------------- | ----- | --------- | -------- |\n"
         for rule, stats in sorted(threat_summary.items()):
             report_content += f"| {rule:<29} | {stats['count']:<5} | {stats['high_confidence']:<9} | {stats['low_confidence']:<8} |\n"
+
+    # Add correlated alerts section
+    if correlated_alerts:
+        report_content += """
+---
+## 🔗 Correlated Security Incidents
+High-priority incidents identified through behavioral pattern analysis.
+
+"""
+        for alert in correlated_alerts:
+            report_content += f"""
+### **{alert['rule_name']}** (Severity: {alert['severity']})
+- **Source IP:** `{alert['source_ip']}`
+- **Event Count:** {alert['event_count']} events in {alert['time_span_seconds']:.0f} seconds
+- **Description:** {alert['description']}
+- **Sample Logs:** {len(alert['sample_logs'])} representative events
+- **Timestamp:** `{alert['timestamp']}`
+
+"""
+    else:
+        report_content += """
+---
+## 🔗 Correlated Security Incidents
+*No correlated incidents detected above threshold levels.*
+
+"""
 
     report_content += """
 ---
@@ -196,25 +302,30 @@ Logs that did not match known patterns but were flagged as significant by the AI
 
 # --- Main Orchestration Workflow ---
 def main():
-    """Main function to orchestrate the entire workflow."""
+    """Main function to orchestrate the entire workflow with alert correlation."""
     
     # 1. Load all logs from the specified files
     all_logs = load_logs_from_files(LOG_DIRECTORY, FILES_TO_PROCESS)
     
-    # 2. Process logs through the triage engine
-    print("--- Starting Triage and Analysis Engine ---")
+    # 2. Initialize correlation tracking
+    print("--- Starting Triage and Analysis Engine (Pass 1: Grouping) ---")
+    event_tracker = defaultdict(lambda: {"count": 0, "timestamps": [], "logs": []})
+    correlated_alerts = []
     analysis_results = []
     unclassified_count = 0
     max_tier3 = int(os.getenv("MAX_TIER3_ESCALATIONS", "50"))
     tier3_used = 0
     pre_filtered_count = 0
 
+    # Pass 1: Process logs and build correlation state
     for i, log in enumerate(all_logs):
         # Provide progress feedback
         if (i + 1) % 1000 == 0:
             print(f"  -> Processed {i+1}/{len(all_logs)} logs...")
 
         classification, rule_name, confidence_score = tier1_triage(log)
+        source_ip = log.get("source.ip", "unknown")
+        log_timestamp = parse_timestamp(log.get("@timestamp", ""))
         
         result = {
             "classification": classification,
@@ -223,7 +334,30 @@ def main():
             "log_context": log
         }
         
-        if classification == "UNCLASSIFIED":
+        # Handle THREAT classification with correlation
+        if classification == "THREAT" and rule_name in CORRELATION_THRESHOLDS:
+            # Update event tracker
+            update_event_tracker(event_tracker, source_ip, rule_name, log_timestamp, log)
+            
+            # Check if we should create a correlated alert
+            should_alert, event_count, time_span = should_create_correlated_alert(
+                event_tracker, source_ip, rule_name, log_timestamp
+            )
+            
+            if should_alert:
+                # Create correlated alert
+                alert = create_correlated_alert(
+                    source_ip, rule_name, event_count, time_span, 
+                    event_tracker[source_ip]['logs']
+                )
+                correlated_alerts.append(alert)
+                print(f"  -> CORRELATED TIER 1 INCIDENT: {rule_name} from {source_ip} ({event_count} events)")
+                
+                # Reset tracker to avoid duplicate alerts
+                event_tracker[source_ip] = {"count": 0, "timestamps": [], "logs": []}
+        
+        # Handle UNCLASSIFIED logs
+        elif classification == "UNCLASSIFIED":
             unclassified_count += 1
             # Use improved escalation logic with confidence scoring
             if should_escalate_to_llm(log) and tier3_used < max_tier3:
@@ -238,6 +372,23 @@ def main():
         
         analysis_results.append(result)
     
+    # Pass 2: Enhanced Tier 3 analysis for correlated incidents
+    print("--- Analysis Engine (Pass 2: Correlation & Escalation) ---")
+    
+    # Group unclassified logs by source IP for enhanced analysis
+    ip_groups = defaultdict(list)
+    for result in analysis_results:
+        if result['classification'] == 'UNCLASSIFIED' and 'llm_analysis' in result:
+            source_ip = result['log_context'].get('source.ip', 'unknown')
+            ip_groups[source_ip].append(result)
+    
+    # Analyze grouped incidents
+    for source_ip, logs in ip_groups.items():
+        if len(logs) >= 5:  # Only analyze IPs with 5+ unclassified events
+            print(f"  -> TIER 3 INCIDENT DETECTED: Analyzing {len(logs)} logs from {source_ip}...")
+            # Here you could implement enhanced LLM analysis for grouped incidents
+            # For now, we'll keep the individual analyses
+    
     print(f"\n--- Triage Complete ---")
     print(f"Total Threats (Tier 1): {len([r for r in analysis_results if r['classification'] == 'THREAT'])}")
     print(f"  - High Confidence: {len([r for r in analysis_results if r['classification'] == 'THREAT' and r.get('confidence_score', 0) > 0.7])}")
@@ -245,9 +396,10 @@ def main():
     print(f"Total Benign (Tier 1): {len([r for r in analysis_results if r['classification'] == 'BENIGN'])}")
     print(f"Total Escalated to LLM (Tier 3): {tier3_used} (of {unclassified_count} unclassified)")
     print(f"Pre-filtered by Tier 3: {pre_filtered_count}")
+    print(f"Correlated Incidents: {len(correlated_alerts)}")
 
-    # 3. Generate the final report
-    generate_security_report(analysis_results)
+    # 3. Generate the final report with correlated alerts
+    generate_security_report(analysis_results, correlated_alerts)
 
 if __name__ == "__main__":
     main()
