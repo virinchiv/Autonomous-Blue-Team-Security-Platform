@@ -27,16 +27,16 @@ from collections import defaultdict
 
 # --- Import your custom modules ---
 from tier1_rules import THREAT_RULES, BENIGN_RULES
-from tier3_llm import analyze_log_with_llm, should_escalate_to_llm, calculate_confidence_score
+from tier3_llm import analyze_log_with_llm, should_escalate_to_llm, calculate_confidence_score, generate_incident_report
 
 # --- Configuration ---
 LOG_DIRECTORY = "normalized_logs"
 # Specify the files from the directory you want to process
 # Modified for testing - only processing access logs
 FILES_TO_PROCESS = [
-    "output_access-10k.log_ecs.json",
+    "output_linux-2k.log_ecs.json",
 ]
-REPORT_FILENAME = "security_intelligence_report.md"
+REPORT_FILENAME = "security_intelligence_report2.md"
 
 # --- Alert Correlation Configuration ---
 TIME_WINDOW_SECONDS = 300  # 5-minute correlation window
@@ -46,7 +46,23 @@ CORRELATION_THRESHOLDS = {
     "Directory Traversal Attempt": 3,  # Alert after 3+ attempts
     "SSH Failed Login": 10,    # Alert after 10+ failed SSH attempts
     "Common Web Scanner User-Agent": 5,  # Alert after 5+ scanner requests
+    
+    # Linux Syslog Correlation Thresholds
+    "SSH Authentication Failure": 5,     # Alert after 5+ SSH auth failures from same IP
+    "SSH Check Pass User Unknown": 3,    # Alert after 3+ unknown user attempts
+    "FTP User Timeout": 2,               # Alert after 2+ FTP timeouts
+    "System Alert Abnormal Exit": 1,     # Alert immediately on system alerts
+    "Suspicious User Session": 2,        # Alert after 2+ suspicious sessions
+    "Multiple SSH Failures": 3,          # Alert after 3+ SSH failures to root
+    "FTP Connection Flood": 10,          # Alert after 10+ FTP connections from same IP
+    "System Service Failure": 1,         # Alert immediately on service failures
+    "Privilege Escalation Attempt": 1,   # Alert immediately on privilege escalation
+    "Suspicious Process Activity": 1,    # Alert immediately on suspicious process activity
 }
+
+# --- Tier 3 Correlation Configuration ---
+TIER3_CORRELATION_THRESHOLD = 5   # Minimum logs to create a Tier 3 incident
+TIER3_TIME_WINDOW_SECONDS = 1800  # 30-minute window for Tier 3 correlation
 
 # --- Core Orchestrator Functions ---
 
@@ -97,12 +113,16 @@ def tier1_triage(log_context: dict):
     """
     searchable_text = json.dumps(log_context)
     confidence_score = calculate_confidence_score(log_context)
+    log_source = log_context.get('log.source', '')
 
     for rule_name, pattern in THREAT_RULES.items():
         # Special handling for SSRF to avoid false positives from referer logs
         if rule_name == "Server-Side Request Forgery (SSRF) Hint":
             # Only scan the actual URL requested by the user, not the entire log
             scan_target = log_context.get("url.original", "")
+        elif log_source == 'linux_syslog':
+            # For Linux syslog entries, scan the message field primarily
+            scan_target = log_context.get("message", "")
         else:
             # For all other rules, use the full log message
             scan_target = searchable_text
@@ -111,7 +131,13 @@ def tier1_triage(log_context: dict):
             return "THREAT", rule_name, confidence_score
     
     for rule_name, pattern in BENIGN_RULES.items():
-        if re.search(pattern, searchable_text, re.IGNORECASE):
+        if log_source == 'linux_syslog':
+            # For Linux syslog entries, scan the message field primarily
+            scan_target = log_context.get("message", "")
+        else:
+            scan_target = searchable_text
+            
+        if re.search(pattern, scan_target, re.IGNORECASE):
             return "BENIGN", rule_name, confidence_score
 
     return "UNCLASSIFIED", None, confidence_score
@@ -185,7 +211,84 @@ def create_correlated_alert(source_ip, rule_name, event_count, time_span, sample
     }
     return alert
 
-def generate_security_report(analysis_results, correlated_alerts=None):
+def group_tier3_logs_by_behavior(unclassified_logs):
+    """
+    Group unclassified logs by behavioral patterns for Tier 3 correlation.
+    Groups by source IP and activity pattern (web or Linux syslog).
+    """
+    behavior_groups = defaultdict(list)
+    
+    for log in unclassified_logs:
+        source_ip = log.get('source.ip', 'unknown')
+        log_source = log.get('log.source', '')
+        
+        if log_source == 'linux_syslog':
+            # Group Linux syslog entries by activity type
+            message = log.get('message', '')
+            process_name = log.get('process.name', '')
+            
+            if 'authentication failure' in message.lower():
+                pattern = 'ssh_auth_failure'
+            elif 'check pass; user unknown' in message.lower():
+                pattern = 'ssh_unknown_user'
+            elif 'connection from' in message.lower() and 'ftpd' in process_name:
+                pattern = 'ftp_connection'
+            elif 'timed out' in message.lower():
+                pattern = 'ftp_timeout'
+            elif 'session opened' in message.lower():
+                pattern = 'user_session'
+            elif 'alert' in message.lower() and 'exited abnormally' in message.lower():
+                pattern = 'system_alert'
+            else:
+                pattern = 'other_syslog_activity'
+        else:
+            # Group web logs by URL pattern (existing logic)
+            url = log.get('url.original', '')
+            
+            if '/filter' in url:
+                pattern = 'filter_activity'
+            elif '/admin' in url or '/wp-admin' in url:
+                pattern = 'admin_access'
+            elif '/robots.txt' in url:
+                pattern = 'reconnaissance'
+            elif '/search' in url or '/prepareSearch' in url:
+                pattern = 'search_activity'
+            else:
+                pattern = 'other_web_activity'
+        
+        group_key = f"{source_ip}_{pattern}"
+        behavior_groups[group_key].append(log)
+    
+    return behavior_groups
+
+def should_create_tier3_incident(logs_group):
+    """
+    Determine if a group of logs should be escalated to Tier 3 incident analysis.
+    """
+    if len(logs_group) < TIER3_CORRELATION_THRESHOLD:
+        return False
+    
+    # Check if logs are within time window
+    timestamps = []
+    for log in logs_group:
+        timestamp_str = log.get('@timestamp', '')
+        if timestamp_str:
+            try:
+                if '+' in timestamp_str:
+                    dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                else:
+                    dt = datetime.fromisoformat(timestamp_str)
+                timestamps.append(dt)
+            except:
+                continue
+    
+    if len(timestamps) >= 2:
+        time_span = (max(timestamps) - min(timestamps)).total_seconds()
+        return time_span <= TIER3_TIME_WINDOW_SECONDS
+    
+    return True  # If we can't parse timestamps, assume it's recent
+
+def generate_security_report(analysis_results, correlated_alerts=None, tier3_incidents=None):
     """Generates a markdown security report from the analysis results."""
     print(f"--- Generating Security Intelligence Report ---")
     
@@ -193,6 +296,7 @@ def generate_security_report(analysis_results, correlated_alerts=None):
     llm_analyzed = [r for r in analysis_results if 'llm_analysis' in r]
     benign = [r for r in analysis_results if r['classification'] == 'BENIGN']
     correlated_alerts = correlated_alerts or []
+    tier3_incidents = tier3_incidents or []
     
     # Filter LLM results to only show actual threats or high-severity issues
     critical_llm_alerts = [
@@ -211,10 +315,10 @@ def generate_security_report(analysis_results, correlated_alerts=None):
 
 ---
 ## 🚨 Executive Summary
-A total of **{len(correlated_alerts) + len(critical_llm_alerts)}** high-priority security events were detected.
+A total of **{len(correlated_alerts) + len(tier3_incidents)}** high-priority security events were detected.
 
 - **{len(correlated_alerts)}** correlated incidents were identified through behavioral analysis.
-- **{len(critical_llm_alerts)}** previously unknown anomalies were classified as Medium or High severity by Tier 3 LLM analysis.
+- **{len(tier3_incidents)}** sophisticated security incidents were analyzed by the Gen-AI SOC Analyst.
 - **{len(threats)}** individual threat events were processed (now grouped into {len(correlated_alerts)} incidents).
 - **{len(benign)}** logs were classified as benign and ignored.
 - **{len([r for r in analysis_results if r.get('pre_filtered', False)])}** logs were pre-filtered as low-priority by Tier 3.
@@ -269,6 +373,60 @@ High-priority incidents identified through behavioral pattern analysis.
 ---
 ## 🔗 Correlated Security Incidents
 *No correlated incidents detected above threshold levels.*
+
+"""
+
+    # Add Gen-AI SOC Analyst section
+    if tier3_incidents:
+        report_content += """
+---
+## 🤖 Gen-AI SOC Analyst: Comprehensive Incident Analysis
+Sophisticated security incidents analyzed by AI-powered behavioral correlation and threat intelligence.
+
+"""
+        for incident in tier3_incidents:
+            report_content += f"""
+### **{incident.get('classification', 'Security Incident')}** (Severity: {incident.get('severity', 'N/A')})
+- **Executive Summary:** {incident.get('executive_summary', 'N/A')}
+
+#### **Attacker Information:**
+- **Source IP:** `{incident.get('attacker_information', {}).get('source_ip', 'N/A')}`
+- **User Agent Analysis:** {incident.get('attacker_information', {}).get('user_agent_analysis', 'N/A')}
+- **Attack Vector:** {incident.get('attacker_information', {}).get('attack_vector', 'N/A')}
+
+#### **Attack Timeline:**
+{incident.get('attack_timeline', 'N/A')}
+
+#### **Hypothesized Attacker Goal:**
+{incident.get('hypothesized_attacker_goal', 'N/A')}
+
+#### **Impact Assessment:**
+{incident.get('impact_assessment', 'N/A')}
+
+#### **Recommended Remediation Steps:**
+"""
+            remediation_steps = incident.get('recommended_remediation_steps', [])
+            if isinstance(remediation_steps, list):
+                for step in remediation_steps:
+                    report_content += f"- {step}\n"
+            else:
+                report_content += f"- {remediation_steps}\n"
+            
+            metadata = incident.get('incident_metadata', {})
+            report_content += f"""
+#### **Incident Metadata:**
+- **Total Logs Analyzed:** {metadata.get('total_logs_analyzed', 'N/A')}
+- **Time Span:** {metadata.get('time_span', 'N/A')}
+- **Analysis Confidence:** {incident.get('confidence_score', 'N/A')}
+- **Analysis Timestamp:** `{metadata.get('analysis_timestamp', 'N/A')}`
+
+---
+"""
+    else:
+        report_content += """
+---
+## 🤖 Gen-AI SOC Analyst: Comprehensive Incident Analysis
+*No sophisticated security incidents detected requiring comprehensive analysis.*
 
 """
 
@@ -375,19 +533,39 @@ def main():
     # Pass 2: Enhanced Tier 3 analysis for correlated incidents
     print("--- Analysis Engine (Pass 2: Correlation & Escalation) ---")
     
-    # Group unclassified logs by source IP for enhanced analysis
-    ip_groups = defaultdict(list)
+    # Collect unclassified logs for Tier 3 correlation
+    unclassified_logs = []
     for result in analysis_results:
-        if result['classification'] == 'UNCLASSIFIED' and 'llm_analysis' in result:
-            source_ip = result['log_context'].get('source.ip', 'unknown')
-            ip_groups[source_ip].append(result)
+        if result['classification'] == 'UNCLASSIFIED':
+            unclassified_logs.append(result['log_context'])
     
-    # Analyze grouped incidents
-    for source_ip, logs in ip_groups.items():
-        if len(logs) >= 5:  # Only analyze IPs with 5+ unclassified events
-            print(f"  -> TIER 3 INCIDENT DETECTED: Analyzing {len(logs)} logs from {source_ip}...")
-            # Here you could implement enhanced LLM analysis for grouped incidents
-            # For now, we'll keep the individual analyses
+    # Group unclassified logs by behavioral patterns
+    behavior_groups = group_tier3_logs_by_behavior(unclassified_logs)
+    
+    # Analyze each behavior group for potential incidents
+    tier3_incidents = []
+    for group_key, logs_group in behavior_groups.items():
+        if should_create_tier3_incident(logs_group):
+            source_ip = logs_group[0].get('source.ip', 'unknown')
+            print(f"  -> TIER 3 INCIDENT DETECTED: Analyzing {len(logs_group)} logs from {source_ip}...")
+            
+            # Generate comprehensive incident report
+            try:
+                incident_analysis = generate_incident_report(logs_group)
+                tier3_incidents.append(incident_analysis)
+                print(f"    -> Generated comprehensive incident report: {incident_analysis.get('classification', 'Unknown')}")
+            except Exception as e:
+                print(f"    -> Error generating incident report: {e}")
+                # Fallback to individual analysis for this group
+                for log in logs_group[:5]:  # Limit to first 5 logs
+                    if tier3_used < max_tier3:
+                        llm_analysis = analyze_log_with_llm(log)
+                        # Add to analysis_results
+                        for result in analysis_results:
+                            if result['log_context'] == log:
+                                result['llm_analysis'] = llm_analysis
+                                break
+                        tier3_used += 1
     
     print(f"\n--- Triage Complete ---")
     print(f"Total Threats (Tier 1): {len([r for r in analysis_results if r['classification'] == 'THREAT'])}")
@@ -397,9 +575,10 @@ def main():
     print(f"Total Escalated to LLM (Tier 3): {tier3_used} (of {unclassified_count} unclassified)")
     print(f"Pre-filtered by Tier 3: {pre_filtered_count}")
     print(f"Correlated Incidents: {len(correlated_alerts)}")
+    print(f"Gen-AI SOC Incidents: {len(tier3_incidents)}")
 
-    # 3. Generate the final report with correlated alerts
-    generate_security_report(analysis_results, correlated_alerts)
+    # 3. Generate the final report with correlated alerts and Gen-AI incidents
+    generate_security_report(analysis_results, correlated_alerts, tier3_incidents)
 
 if __name__ == "__main__":
     main()

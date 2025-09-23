@@ -1,6 +1,7 @@
 import os
 import json
 import re
+from datetime import datetime
 from groq import Groq
 from dotenv import load_dotenv
 
@@ -62,10 +63,73 @@ def is_normal_web_request(log: dict) -> bool:
         
     return False
 
+def is_normal_linux_syslog(log: dict) -> bool:
+    """Check if the Linux syslog entry represents normal system activity."""
+    log_source = log.get('log.source', '')
+    message = log.get('message', '')
+    process_name = log.get('process.name', '')
+    
+    # Only check Linux syslogs
+    if log_source != 'linux_syslog':
+        return False
+    
+    # Normal system sessions (cyrus, news users are system accounts)
+    if re.search(r'(?i)session (opened|closed) for user (cyrus|news)', message):
+        return True
+    
+    # Normal system services
+    if re.search(r'(?i)(cupsd|syslogd).*(startup|shutdown|restart) succeeded', message):
+        return True
+    
+    # Normal system processes
+    if re.search(r'(?i)(logrotate|syslogd).*restart', message):
+        return True
+    
+    # Normal FTP connections (not necessarily threats)
+    if re.search(r'(?i)connection from.*at.*\d{4}', message):
+        return True
+    
+    return False
+
 def calculate_confidence_score(log: dict) -> float:
     """Calculate confidence score for whether this log needs LLM analysis."""
     score = 1.0  # Start with high confidence (low priority for LLM)
+    log_source = log.get('log.source', '')
     
+    # Handle Linux syslog entries
+    if log_source == 'linux_syslog':
+        # Reduce confidence for normal Linux syslog activity
+        if is_normal_linux_syslog(log):
+            score -= 0.9  # More aggressive reduction for normal system activity
+        
+        # Increase confidence for suspicious Linux syslog patterns
+        message = log.get('message', '')
+        process_name = log.get('process.name', '')
+        
+        # SSH authentication failures are high priority
+        if 'authentication failure' in message.lower():
+            score += 0.6
+        
+        # System alerts and abnormal exits
+        if 'alert' in message.lower() and 'exited abnormally' in message.lower():
+            score += 0.5
+        
+        # FTP timeouts and connection issues
+        if 'timed out' in message.lower() or 'timeout' in message.lower():
+            score += 0.4
+        
+        # Privilege escalation attempts
+        if 'session opened for user' in message.lower() and 'uid=0' in message:
+            score += 0.3
+        
+        # Multiple connection attempts from same source
+        source_ip = log.get('source.ip', '')
+        if source_ip and source_ip != 'unknown':
+            score += 0.2  # Boost for having source IP information
+        
+        return max(0.0, min(1.0, score))  # Clamp between 0 and 1
+    
+    # Handle web logs (existing logic)
     # Reduce confidence if it's a known bot
     if is_known_bot(log.get('user_agent.original', '')):
         score -= 0.9  # More aggressive reduction for known bots
@@ -193,4 +257,141 @@ def analyze_log_with_llm(log_context: dict):
             "confidence_score": confidence_score,
             "pre_filtered": False
         }
+
+def generate_incident_report(incident_logs: list):
+    """
+    Generates a comprehensive security incident report for correlated Tier 3 anomalies.
+    
+    Args:
+        incident_logs: A list of related log entries that form a security incident
+        
+    Returns:
+        A dictionary containing the comprehensive incident analysis
+    """
+    if groq_client is None:
+        return {
+            "classification": "Incident Analysis Error",
+            "executive_summary": "LLM unavailable for incident analysis.",
+            "severity": "Informational",
+            "recommended_action": "Set GROQ_API_KEY and rerun for comprehensive incident analysis."
+        }
+    
+    # Prepare the log data for analysis
+    log_summary = []
+    for i, log in enumerate(incident_logs[:20]):  # Limit to first 20 logs to avoid token limits
+        log_source = log.get('log.source', '')
+        
+        if log_source == 'linux_syslog':
+            # Linux syslog specific fields
+            log_entry = {
+                "index": i + 1,
+                "timestamp": log.get('@timestamp', 'N/A'),
+                "source_ip": log.get('source.ip', 'N/A'),
+                "host_name": log.get('host.name', 'N/A'),
+                "process_name": log.get('process.name', 'N/A'),
+                "process_pid": log.get('process.pid', 'N/A'),
+                "event_category": log.get('event.category', 'N/A'),
+                "event_type": log.get('event.type', 'N/A'),
+                "event_outcome": log.get('event.outcome', 'N/A'),
+                "user_name": log.get('user.name', 'N/A'),
+                "message": log.get('message', 'N/A'),
+                "raw": log.get('raw', 'N/A')
+            }
+        else:
+            # Web log fields (existing logic)
+            log_entry = {
+                "index": i + 1,
+                "timestamp": log.get('@timestamp', 'N/A'),
+                "source_ip": log.get('source.ip', 'N/A'),
+                "url": log.get('url.original', 'N/A'),
+                "method": log.get('http.request.method', 'N/A'),
+                "status_code": log.get('http.response.status_code', 'N/A'),
+                "user_agent": log.get('user_agent.original', 'N/A'),
+                "message": log.get('message', 'N/A')
+            }
+        log_summary.append(log_entry)
+    
+    # Create the comprehensive incident analysis prompt
+    prompt = f"""
+You are a Tier 3 Security Operations Center (SOC) Analyst. I have detected a correlated security incident involving {len(incident_logs)} related log entries. Your task is to analyze this group of related log entries and write a comprehensive security incident report.
+
+The report must be in JSON format with the following structure:
+{{
+    "classification": "Specific incident type (e.g., 'Coordinated Web Scraping', 'Reconnaissance Activity', 'Automated Attack Campaign')",
+    "executive_summary": "A brief, high-level summary of the incident (2-3 sentences)",
+    "attacker_information": {{
+        "source_ip": "Primary source IP address",
+        "user_agent_analysis": "Analysis of the user agent and what it reveals about the attacker",
+        "attack_vector": "How the attack was conducted"
+    }},
+    "attack_timeline": "A chronological summary of the attacker's actions with timestamps",
+    "hypothesized_attacker_goal": "Based on the observed activity, what was the attacker likely trying to achieve?",
+    "impact_assessment": "What is the potential impact of this activity on the business?",
+    "severity": "High/Medium/Low based on the overall threat level",
+    "recommended_remediation_steps": [
+        "List of concrete, actionable steps to take",
+        "Each step should be specific and implementable"
+    ],
+    "confidence_score": "Your confidence in this analysis (0.0-1.0)"
+}}
+
+Here are the correlated log entries for the incident:
+
+{json.dumps(log_summary, indent=2)}
+
+Analyze this incident comprehensively and provide a detailed security assessment.
+"""
+
+    try:
+        chat_completion = groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.1-8b-instant",
+            temperature=0.1,  # Lower temperature for more consistent analysis
+            max_tokens=800,   # Increased for comprehensive reports
+            response_format={"type": "json_object"},
+        )
+        
+        response_text = chat_completion.choices[0].message.content
+        incident_analysis = json.loads(response_text)
+        
+        # Add metadata
+        incident_analysis["incident_metadata"] = {
+            "total_logs_analyzed": len(incident_logs),
+            "analysis_timestamp": datetime.now().isoformat(),
+            "source_ips": list(set(log.get('source.ip', 'unknown') for log in incident_logs)),
+            "time_span": _calculate_incident_timespan(incident_logs)
+        }
+        
+        return incident_analysis
+
+    except Exception as e:
+        print(f"An unexpected error occurred during incident analysis: {e}")
+        return {
+            "classification": "Incident Analysis Error",
+            "executive_summary": "Failed to analyze the correlated incident.",
+            "severity": "Low",
+            "recommended_action": f"Check LLM API status and error logs. Error: {str(e)}"
+        }
+
+def _calculate_incident_timespan(logs):
+    """Calculate the time span of an incident from the logs."""
+    try:
+        timestamps = []
+        for log in logs:
+            timestamp_str = log.get('@timestamp', '')
+            if timestamp_str:
+                # Parse timestamp
+                if '+' in timestamp_str:
+                    dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                else:
+                    dt = datetime.fromisoformat(timestamp_str)
+                timestamps.append(dt)
+        
+        if len(timestamps) >= 2:
+            time_span = (max(timestamps) - min(timestamps)).total_seconds()
+            return f"{time_span:.0f} seconds"
+        else:
+            return "Unknown"
+    except:
+        return "Unknown"
 

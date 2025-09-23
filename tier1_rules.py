@@ -12,6 +12,13 @@ BENIGN_RULES = {
     "Normal Image Requests": r"/image/\d+/product(Model|Type)/\d+x\d+",
     "Normal Product Pages": r"/product/\d+",
     "Normal Filter Requests": r"/filter/[a-zA-Z0-9,|%]+",
+    
+    # Linux Syslog Benign Patterns
+    "Normal System Session": r"(?i)session (opened|closed) for user",
+    "Normal System Service": r"(?i)(cupsd|syslogd).*(startup|shutdown|restart) succeeded",
+    "Normal FTP Connection": r"(?i)connection from.*at.*\d{4}",
+    "Normal System Process": r"(?i)(logrotate|syslogd).*restart",
+    "Normal User Switch": r"(?i)session opened for user (cyrus|news) by \(uid=0\)",
 }
 
 THREAT_RULES = {
@@ -42,4 +49,16 @@ THREAT_RULES = {
 
     "Suspicious 404 Patterns": r"\"\s+404\s+.*(admin|wp-admin|phpmyadmin|\.env|config|backup)",
     "High-Volume 4xx Errors": r"\"\s+4\d{2}\s+.*(from same IP in short time)",  # Requires correlation
+    
+    # --- Linux Syslog Threat Patterns ---
+    "SSH Authentication Failure": r"(?i)authentication failure.*rhost=",
+    "SSH Check Pass User Unknown": r"(?i)check pass; user unknown",
+    "FTP User Timeout": r"(?i)User unknown timed out after",
+    "System Alert Abnormal Exit": r"(?i)ALERT exited abnormally with",
+    "Suspicious User Session": r"(?i)session opened for user.*by \(uid=0\)",
+    "Multiple SSH Failures": r"(?i)authentication failure.*rhost=.*user=root",
+    "FTP Connection Flood": r"(?i)connection from.*at.*\d{4}.*connection from.*at.*\d{4}",  # Multiple connections
+    "System Service Failure": r"(?i)(cupsd|syslogd).*(shutdown|startup) failed",
+    "Privilege Escalation Attempt": r"(?i)session opened for user (root|admin) by \(uid=\d+\)",
+    "Suspicious Process Activity": r"(?i)(logrotate|syslogd).*exited abnormally",
 }
