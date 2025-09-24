@@ -1,38 +1,24 @@
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
-
-
-# # --- Configuration ---
-# ELASTICSEARCH_HOST = "http://localhost:9200"
-# INDEX_NAME = "unified-logs"
-# BATCH_SIZE = 1000
-# LOOP_DELAY_SECONDS = 1
-
-# # --- Initialize connections and models ---
-# try:
-#     es_client = Elasticsearch([ELASTICSEARCH_HOST], request_timeout=30, api_key=None, basic_auth=None)
-#     anomaly_detector = BertAnomalyDetector(model_path="hdbscan_model.joblib")  # Use trained model
-#     print("Orchestrator initialized successfully.")
-# except Exception as e:
-#     print(f"Error during initialization: {e}")
-#     exit()
-
-# --- Tier Processing Functions ---
-
 import os
 import json
 import re
 from datetime import datetime, timedelta
 from collections import defaultdict
-
 # --- Import your custom modules ---
 from tier1_rules import THREAT_RULES, BENIGN_RULES
 from tier3_llm import analyze_log_with_llm, should_escalate_to_llm, calculate_confidence_score, generate_incident_report
 
 # --- Configuration ---
+# Elasticsearch Configuration
+ELASTICSEARCH_HOST = "http://localhost:9200"
+UNIFIED_LOGS_INDEX = "unified-logs"
+INCIDENTS_INDEX = "aion-incidents"
+BATCH_SIZE = 1000
+LOOP_DELAY_SECONDS = 30
+
+# Legacy file-based configuration (for fallback)
 LOG_DIRECTORY = "normalized_logs"
-# Specify the files from the directory you want to process
-# Modified for testing - only processing access logs
 FILES_TO_PROCESS = [
     "output_linux-2k.log_ecs.json",
 ]
@@ -65,6 +51,150 @@ TIER3_CORRELATION_THRESHOLD = 5   # Minimum logs to create a Tier 3 incident
 TIER3_TIME_WINDOW_SECONDS = 1800  # 30-minute window for Tier 3 correlation
 
 # --- Core Orchestrator Functions ---
+
+def initialize_elasticsearch():
+    """Initialize Elasticsearch client and verify connection."""
+    try:
+        es_client = Elasticsearch([ELASTICSEARCH_HOST], request_timeout=30)
+        
+        # Test connection
+        if es_client.ping():
+            print(f"✅ Connected to Elasticsearch at {ELASTICSEARCH_HOST}")
+            
+            # Check if unified-logs index exists
+            if es_client.indices.exists(index=UNIFIED_LOGS_INDEX):
+                print(f"✅ Found index: {UNIFIED_LOGS_INDEX}")
+            else:
+                print(f"⚠️  Index {UNIFIED_LOGS_INDEX} does not exist. Will create it when needed.")
+            
+            # Ensure incidents index exists
+            create_incidents_index(es_client)
+            
+            return es_client
+        else:
+            print(f"❌ Failed to connect to Elasticsearch at {ELASTICSEARCH_HOST}")
+            return None
+    except Exception as e:
+        print(f"❌ Error initializing Elasticsearch: {e}")
+        return None
+
+def create_incidents_index(es_client):
+    """Create the incidents index with proper mapping if it doesn't exist."""
+    if not es_client.indices.exists(index=INCIDENTS_INDEX):
+        mapping = {
+            "mappings": {
+                "properties": {
+                    "incident_id": {"type": "keyword"},
+                    "title": {"type": "text"},
+                    "summary": {"type": "text"},
+                    "severity": {"type": "keyword"},
+                    "classification": {"type": "keyword"},
+                    "source_ip": {"type": "ip"},
+                    "attacker_information": {"type": "object"},
+                    "attack_timeline": {"type": "text"},
+                    "hypothesized_attacker_goal": {"type": "text"},
+                    "impact_assessment": {"type": "text"},
+                    "recommended_remediation_steps": {"type": "text"},
+                    "confidence_score": {"type": "float"},
+                    "log_ids": {"type": "keyword"},
+                    "created_at": {"type": "date"},
+                    "updated_at": {"type": "date"},
+                    "status": {"type": "keyword"}
+                }
+            }
+        }
+        
+        try:
+            es_client.indices.create(index=INCIDENTS_INDEX, body=mapping)
+            print(f"✅ Created incidents index: {INCIDENTS_INDEX}")
+        except Exception as e:
+            print(f"⚠️  Could not create incidents index: {e}")
+
+def fetch_pending_logs_from_elasticsearch(es_client, batch_size=BATCH_SIZE):
+    """Fetch logs from Elasticsearch where aion.status is 'pending'."""
+    try:
+        query = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {"exists": {"field": "aion.status"}},
+                        {"term": {"aion.status": "pending"}}
+                    ]
+                }
+            },
+            "size": batch_size,
+            "sort": [{"@timestamp": {"order": "asc"}}]
+        }
+        
+        response = es_client.search(index=UNIFIED_LOGS_INDEX, body=query)
+        logs = [hit["_source"] for hit in response["hits"]["hits"]]
+        log_ids = [hit["_id"] for hit in response["hits"]["hits"]]
+        
+        print(f"📥 Fetched {len(logs)} pending logs from Elasticsearch")
+        return logs, log_ids
+        
+    except Exception as e:
+        print(f"❌ Error fetching logs from Elasticsearch: {e}")
+        return [], []
+
+def update_log_status_in_elasticsearch(es_client, log_ids, status):
+    """Update the aion.status field for processed logs."""
+    if not log_ids:
+        return
+    
+    try:
+        # Use bulk update for efficiency
+        bulk_body = []
+        for log_id in log_ids:
+            bulk_body.extend([
+                {"update": {"_index": UNIFIED_LOGS_INDEX, "_id": log_id}},
+                {"doc": {"aion.status": status, "aion.processed_at": datetime.now().isoformat()}}
+            ])
+        
+        if bulk_body:
+            response = es_client.bulk(body=bulk_body)
+            if response.get("errors"):
+                print(f"⚠️  Some log status updates failed: {response['errors']}")
+            else:
+                print(f"✅ Updated status to '{status}' for {len(log_ids)} logs")
+                
+    except Exception as e:
+        print(f"❌ Error updating log status: {e}")
+
+def save_incident_to_elasticsearch(es_client, incident_data):
+    """Save incident data to the incidents index."""
+    try:
+        # Generate unique incident ID
+        incident_id = f"incident_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(str(incident_data)) % 10000}"
+        
+        # Prepare document
+        doc = {
+            "incident_id": incident_id,
+            "title": incident_data.get("classification", "Security Incident"),
+            "summary": incident_data.get("executive_summary", ""),
+            "severity": incident_data.get("severity", "Medium"),
+            "classification": incident_data.get("classification", "Unknown"),
+            "source_ip": incident_data.get("attacker_information", {}).get("source_ip", "unknown"),
+            "attacker_information": incident_data.get("attacker_information", {}),
+            "attack_timeline": incident_data.get("attack_timeline", ""),
+            "hypothesized_attacker_goal": incident_data.get("hypothesized_attacker_goal", ""),
+            "impact_assessment": incident_data.get("impact_assessment", ""),
+            "recommended_remediation_steps": incident_data.get("recommended_remediation_steps", []),
+            "confidence_score": incident_data.get("confidence_score", 0.0),
+            "log_ids": incident_data.get("log_ids", []),
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "status": "active"
+        }
+        
+        # Index the document
+        response = es_client.index(index=INCIDENTS_INDEX, body=doc)
+        print(f"✅ Saved incident {incident_id} to Elasticsearch")
+        return incident_id
+        
+    except Exception as e:
+        print(f"❌ Error saving incident to Elasticsearch: {e}")
+        return None
 
 def load_logs_from_files(directory, filenames):
     """Loads all log entries from a list of JSON files in a directory."""
@@ -288,9 +418,10 @@ def should_create_tier3_incident(logs_group):
     
     return True  # If we can't parse timestamps, assume it's recent
 
-def generate_security_report(analysis_results, correlated_alerts=None, tier3_incidents=None):
+def generate_security_report(analysis_results, correlated_alerts=None, tier3_incidents=None, filename=None):
     """Generates a markdown security report from the analysis results."""
-    print(f"--- Generating Security Intelligence Report ---")
+    report_filename = filename or REPORT_FILENAME
+    print(f"--- Generating Security Intelligence Report: {report_filename} ---")
     
     threats = [r for r in analysis_results if r['classification'] == 'THREAT']
     llm_analyzed = [r for r in analysis_results if 'llm_analysis' in r]
@@ -453,20 +584,20 @@ Logs that did not match known patterns but were flagged as significant by the AI
 ---
 """
 
-    with open(REPORT_FILENAME, 'w') as f:
+    with open(report_filename, 'w') as f:
         f.write(report_content)
-    print(f"\n✅ Report successfully generated: {REPORT_FILENAME}")
+    print(f"\n✅ Report successfully generated: {report_filename}")
 
 
 # --- Main Orchestration Workflow ---
-def main():
-    """Main function to orchestrate the entire workflow with alert correlation."""
+def process_logs_batch(es_client, logs, log_ids):
+    """Process a batch of logs and return analysis results."""
+    if not logs:
+        return [], [], []
     
-    # 1. Load all logs from the specified files
-    all_logs = load_logs_from_files(LOG_DIRECTORY, FILES_TO_PROCESS)
+    print(f"--- Processing batch of {len(logs)} logs ---")
     
-    # 2. Initialize correlation tracking
-    print("--- Starting Triage and Analysis Engine (Pass 1: Grouping) ---")
+    # Initialize correlation tracking
     event_tracker = defaultdict(lambda: {"count": 0, "timestamps": [], "logs": []})
     correlated_alerts = []
     analysis_results = []
@@ -476,10 +607,10 @@ def main():
     pre_filtered_count = 0
 
     # Pass 1: Process logs and build correlation state
-    for i, log in enumerate(all_logs):
+    for i, log in enumerate(logs):
         # Provide progress feedback
-        if (i + 1) % 1000 == 0:
-            print(f"  -> Processed {i+1}/{len(all_logs)} logs...")
+        if (i + 1) % 100 == 0:
+            print(f"  -> Processed {i+1}/{len(logs)} logs...")
 
         classification, rule_name, confidence_score = tier1_triage(log)
         source_ip = log.get("source.ip", "unknown")
@@ -552,6 +683,8 @@ def main():
             # Generate comprehensive incident report
             try:
                 incident_analysis = generate_incident_report(logs_group)
+                # Add log IDs to incident data
+                incident_analysis['log_ids'] = [log_ids[i] for i, log in enumerate(logs) if log in logs_group]
                 tier3_incidents.append(incident_analysis)
                 print(f"    -> Generated comprehensive incident report: {incident_analysis.get('classification', 'Unknown')}")
             except Exception as e:
@@ -567,18 +700,146 @@ def main():
                                 break
                         tier3_used += 1
     
-    print(f"\n--- Triage Complete ---")
+    print(f"\n--- Batch Processing Complete ---")
     print(f"Total Threats (Tier 1): {len([r for r in analysis_results if r['classification'] == 'THREAT'])}")
-    print(f"  - High Confidence: {len([r for r in analysis_results if r['classification'] == 'THREAT' and r.get('confidence_score', 0) > 0.7])}")
-    print(f"  - Low Confidence: {len([r for r in analysis_results if r['classification'] == 'THREAT' and r.get('confidence_score', 0) <= 0.7])}")
     print(f"Total Benign (Tier 1): {len([r for r in analysis_results if r['classification'] == 'BENIGN'])}")
     print(f"Total Escalated to LLM (Tier 3): {tier3_used} (of {unclassified_count} unclassified)")
     print(f"Pre-filtered by Tier 3: {pre_filtered_count}")
     print(f"Correlated Incidents: {len(correlated_alerts)}")
     print(f"Gen-AI SOC Incidents: {len(tier3_incidents)}")
+    
+    return analysis_results, correlated_alerts, tier3_incidents
 
-    # 3. Generate the final report with correlated alerts and Gen-AI incidents
+def main():
+    """Main function to orchestrate the entire workflow with Elasticsearch integration."""
+    
+    # Initialize Elasticsearch connection
+    es_client = initialize_elasticsearch()
+    if not es_client:
+        print("❌ Cannot proceed without Elasticsearch connection. Exiting.")
+        return
+    
+    # 1. Fetch pending logs from Elasticsearch
+    logs, log_ids = fetch_pending_logs_from_elasticsearch(es_client)
+    
+    if not logs:
+        print("ℹ️  No pending logs found in Elasticsearch. Exiting.")
+        return
+    
+    # 2. Process the batch of logs
+    analysis_results, correlated_alerts, tier3_incidents = process_logs_batch(es_client, logs, log_ids)
+    
+    # 3. Update log statuses in Elasticsearch
+    if analysis_results:
+        # Group log IDs by classification for status updates
+        threat_log_ids = []
+        benign_log_ids = []
+        analyzed_log_ids = []
+        
+        for i, result in enumerate(analysis_results):
+            if result['classification'] == 'THREAT':
+                threat_log_ids.append(log_ids[i])
+            elif result['classification'] == 'BENIGN':
+                benign_log_ids.append(log_ids[i])
+            else:
+                analyzed_log_ids.append(log_ids[i])
+        
+        # Update statuses
+        if threat_log_ids:
+            update_log_status_in_elasticsearch(es_client, threat_log_ids, "threat")
+        if benign_log_ids:
+            update_log_status_in_elasticsearch(es_client, benign_log_ids, "benign")
+        if analyzed_log_ids:
+            update_log_status_in_elasticsearch(es_client, analyzed_log_ids, "analyzed")
+    
+    # 4. Save incidents to Elasticsearch
+    for incident in tier3_incidents:
+        save_incident_to_elasticsearch(es_client, incident)
+    
+    # 5. Generate the final report with correlated alerts and Gen-AI incidents
     generate_security_report(analysis_results, correlated_alerts, tier3_incidents)
 
+def run_real_time_service():
+    """Run the orchestrator as a continuous real-time service."""
+    import time
+    
+    print("🚀 Starting AION Real-Time Security Orchestrator Service")
+    print(f"⏰ Processing interval: {LOOP_DELAY_SECONDS} seconds")
+    print("🔄 Service will run continuously. Press Ctrl+C to stop.")
+    print("-" * 60)
+    
+    # Initialize Elasticsearch connection
+    es_client = initialize_elasticsearch()
+    if not es_client:
+        print("❌ Cannot start service without Elasticsearch connection. Exiting.")
+        return
+    
+    cycle_count = 0
+    
+    try:
+        while True:
+            cycle_count += 1
+            print(f"\n🔄 Processing Cycle #{cycle_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            # Fetch pending logs from Elasticsearch
+            logs, log_ids = fetch_pending_logs_from_elasticsearch(es_client)
+            
+            if logs:
+                # Process the batch
+                analysis_results, correlated_alerts, tier3_incidents = process_logs_batch(es_client, logs, log_ids)
+                
+                # Update log statuses in Elasticsearch
+                if analysis_results:
+                    # Group log IDs by classification for status updates
+                    threat_log_ids = []
+                    benign_log_ids = []
+                    analyzed_log_ids = []
+                    
+                    for i, result in enumerate(analysis_results):
+                        if result['classification'] == 'THREAT':
+                            threat_log_ids.append(log_ids[i])
+                        elif result['classification'] == 'BENIGN':
+                            benign_log_ids.append(log_ids[i])
+                        else:
+                            analyzed_log_ids.append(log_ids[i])
+                    
+                    # Update statuses
+                    if threat_log_ids:
+                        update_log_status_in_elasticsearch(es_client, threat_log_ids, "threat")
+                    if benign_log_ids:
+                        update_log_status_in_elasticsearch(es_client, benign_log_ids, "benign")
+                    if analyzed_log_ids:
+                        update_log_status_in_elasticsearch(es_client, analyzed_log_ids, "analyzed")
+                
+                # Save incidents to Elasticsearch
+                for incident in tier3_incidents:
+                    save_incident_to_elasticsearch(es_client, incident)
+                
+                # Generate report for this cycle
+                report_filename = f"security_intelligence_report_cycle_{cycle_count}.md"
+                generate_security_report(analysis_results, correlated_alerts, tier3_incidents, report_filename)
+                
+                print(f"✅ Cycle #{cycle_count} completed successfully")
+            else:
+                print(f"ℹ️  No pending logs found in cycle #{cycle_count}")
+            
+            # Wait before next cycle
+            print(f"⏳ Waiting {LOOP_DELAY_SECONDS} seconds before next cycle...")
+            time.sleep(LOOP_DELAY_SECONDS)
+            
+    except KeyboardInterrupt:
+        print(f"\n🛑 Service stopped by user after {cycle_count} cycles")
+    except Exception as e:
+        print(f"\n❌ Service error: {e}")
+        print("🔄 Service will continue after error...")
+        time.sleep(LOOP_DELAY_SECONDS)
+
 if __name__ == "__main__":
-    main()
+    import sys
+    
+    # Check command line arguments
+    if len(sys.argv) > 1 and sys.argv[1] == "--service":
+        run_real_time_service()
+    else:
+        # Run in batch mode (legacy behavior)
+        main()
