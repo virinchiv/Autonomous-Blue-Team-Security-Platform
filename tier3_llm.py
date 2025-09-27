@@ -168,8 +168,11 @@ def calculate_confidence_score(log: dict) -> float:
     
     return max(0.0, min(1.0, score))  # Clamp between 0 and 1
 
-def should_escalate_to_llm(log: dict, confidence_threshold: float = 0.5) -> bool:
-    """Determine if a log should be escalated to LLM analysis."""
+def should_escalate_to_llm(log: dict, confidence_threshold: float = 0.3) -> bool:
+    """
+    Determine if a log should be escalated to LLM analysis.
+    Lowered threshold to 0.3 to catch more potential threats and minimize false negatives.
+    """
     confidence = calculate_confidence_score(log)
     return confidence >= confidence_threshold
 
@@ -186,8 +189,9 @@ def analyze_log_with_llm(log_context: dict):
     # Calculate confidence score for this log
     confidence_score = calculate_confidence_score(log_context)
     
-    # Pre-filter: Skip LLM analysis for low-confidence logs
-    if confidence_score < 0.5:
+    # Pre-filter: Skip LLM analysis for very low-confidence logs
+    # Lowered threshold to 0.2 to minimize false negatives
+    if confidence_score < 0.2:
         return {
             "classification": "Low Priority (Pre-filtered)",
             "hypothesis": "Log appears to be normal web traffic or legitimate bot activity.",
@@ -324,7 +328,7 @@ The report must be in JSON format with the following structure:
         "user_agent_analysis": "Analysis of the user agent and what it reveals about the attacker",
         "attack_vector": "How the attack was conducted"
     }},
-    "attack_timeline": "A chronological summary of the attacker's actions with timestamps",
+    "attack_timeline": "A chronological summary of the attacker's actions with timestamps (MUST be a single text string, not an object)",
     "hypothesized_attacker_goal": "Based on the observed activity, what was the attacker likely trying to achieve?",
     "impact_assessment": "What is the potential impact of this activity on the business?",
     "severity": "High/Medium/Low based on the overall threat level",
@@ -332,8 +336,13 @@ The report must be in JSON format with the following structure:
         "List of concrete, actionable steps to take",
         "Each step should be specific and implementable"
     ],
-    "confidence_score": "Your confidence in this analysis (0.0-1.0)"
+    "confidence_score": 0.85
 }}
+
+IMPORTANT: 
+- attack_timeline must be a single text string, not an object or array
+- recommended_remediation_steps must be an array of strings
+- confidence_score must be a number between 0.0 and 1.0
 
 Here are the correlated log entries for the incident:
 
