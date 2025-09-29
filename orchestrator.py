@@ -3,22 +3,34 @@ from elasticsearch.helpers import scan
 import os
 import json
 import re
+import sys
 from datetime import datetime, timedelta
 from collections import defaultdict
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 # --- Import your custom modules ---
 from tier1_rules import THREAT_RULES, BENIGN_RULES
 from tier3_llm import analyze_log_with_llm, should_escalate_to_llm, calculate_confidence_score, generate_incident_report
 
-# --- Configuration ---
+# --- Configuration from Environment Variables ---
 # Elasticsearch Configuration
-ELASTICSEARCH_HOST = "http://localhost:9200"
-UNIFIED_LOGS_INDEX = "unified-logs"
-INCIDENTS_INDEX = "aion-incidents"
-BATCH_SIZE = 1000
-LOOP_DELAY_SECONDS = 30
+ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
+ELASTICSEARCH_USERNAME = os.getenv("ELASTICSEARCH_USERNAME", "")
+ELASTICSEARCH_PASSWORD = os.getenv("ELASTICSEARCH_PASSWORD", "")
+ELASTICSEARCH_SSL_VERIFY = os.getenv("ELASTICSEARCH_SSL_VERIFY", "true").lower() == "true"
+
+UNIFIED_LOGS_INDEX = os.getenv("UNIFIED_LOGS_INDEX", "unified-logs")
+INCIDENTS_INDEX = os.getenv("INCIDENTS_INDEX", "aion-incidents")
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1000"))
+LOOP_DELAY_SECONDS = int(os.getenv("LOOP_DELAY_SECONDS", "30"))
+MAX_DEMO_LOGS = int(os.getenv("MAX_DEMO_LOGS", "2000"))
+CORRELATION_TIME_WINDOW = int(os.getenv("CORRELATION_TIME_WINDOW", "300"))
 
 # --- Alert Correlation Configuration ---
-TIME_WINDOW_SECONDS = 300  # 5-minute correlation window
+TIME_WINDOW_SECONDS = CORRELATION_TIME_WINDOW  # Use environment variable
 CORRELATION_THRESHOLDS = {
     "Client Error (4xx)": 20,  # Alert after 20+ 4xx errors from same IP
     "Server Error (5xx)": 5,   # Alert after 5+ 5xx errors from same IP
@@ -39,11 +51,66 @@ CORRELATION_THRESHOLDS = {
     "Suspicious Process Activity": 1,    # Alert immediately on suspicious process activity
 }
 
+# --- Environment Validation ---
+def validate_environment():
+    """Validate required environment variables and configuration."""
+    print("🔍 Validating environment configuration...")
+    
+    # Check for required environment variables
+    required_vars = []
+    optional_vars = {
+        "GROQ_API_KEY": "AI-powered threat analysis (optional but recommended)",
+        "ELASTICSEARCH_HOST": "Elasticsearch connection (defaults to localhost:9200)",
+        "UNIFIED_LOGS_INDEX": "Log storage index (defaults to unified-logs)",
+        "INCIDENTS_INDEX": "Incident storage index (defaults to aion-incidents)"
+    }
+    
+    # Check optional variables
+    for var, description in optional_vars.items():
+        value = os.getenv(var)
+        if value:
+            print(f"✅ {var}: {description}")
+        else:
+            print(f"ℹ️  {var}: Not set, using default value")
+    
+    # Validate numeric values
+    try:
+        int(os.getenv("BATCH_SIZE", "1000"))
+        int(os.getenv("LOOP_DELAY_SECONDS", "30"))
+        int(os.getenv("MAX_DEMO_LOGS", "2000"))
+        int(os.getenv("CORRELATION_TIME_WINDOW", "300"))
+        print("✅ Numeric configuration values are valid")
+    except ValueError as e:
+        print(f"❌ Invalid numeric configuration: {e}")
+        return False
+    
+    # Check if .env file exists
+    if os.path.exists(".env"):
+        print("✅ Found .env file")
+    else:
+        print("⚠️  No .env file found. Using default values.")
+        print("   Copy .env.example to .env and configure your settings.")
+    
+    print("✅ Environment validation completed")
+    return True
+
 # --- Core Orchestrator Functions ---
 def initialize_elasticsearch():
     """Initialize Elasticsearch client and verify connection."""
     try:
-        es_client = Elasticsearch([ELASTICSEARCH_HOST], request_timeout=30)
+        # Build Elasticsearch connection parameters
+        es_config = {
+            "hosts": [ELASTICSEARCH_HOST],
+            "request_timeout": 30,
+            "verify_certs": ELASTICSEARCH_SSL_VERIFY
+        }
+        
+        # Add authentication if provided
+        if ELASTICSEARCH_USERNAME and ELASTICSEARCH_PASSWORD:
+            es_config["basic_auth"] = (ELASTICSEARCH_USERNAME, ELASTICSEARCH_PASSWORD)
+            print(f"🔐 Using Elasticsearch authentication")
+        
+        es_client = Elasticsearch(**es_config)
         
         # Test connection
         if es_client.ping():
@@ -502,8 +569,11 @@ def process_logs_batch(es_client, logs, log_ids):
     
     return enriched_incidents, stored_incident_ids, processing_stats
 
-def fetch_all_logs_for_demo(es_client, max_logs=2000):
+def fetch_all_logs_for_demo(es_client, max_logs=None):
     """Fetch all available logs from Elasticsearch for demo purposes."""
+    if max_logs is None:
+        max_logs = MAX_DEMO_LOGS
+    
     try:
         query = {
             "query": {
@@ -715,11 +785,17 @@ def run_demo_mode():
     print("🎬 Starting AION Security Orchestrator Demo Mode")
     print("=" * 60)
     print("This demo will:")
-    print("1. Fetch existing logs from Elasticsearch")
-    print("2. Process them through the complete incident workflow")
-    print("3. Generate a comprehensive security intelligence report")
-    print("4. Store incidents in the backend")
+    print("1. Validate environment configuration")
+    print("2. Fetch existing logs from Elasticsearch")
+    print("3. Process them through the complete incident workflow")
+    print("4. Generate a comprehensive security intelligence report")
+    print("5. Store incidents in the backend")
     print("=" * 60)
+    
+    # Validate environment configuration
+    if not validate_environment():
+        print("❌ Environment validation failed. Please check your configuration.")
+        return
     
     # Initialize Elasticsearch connection
     es_client = initialize_elasticsearch()
@@ -729,7 +805,7 @@ def run_demo_mode():
     
     # Fetch all available logs for demo
     print("\n📥 Fetching logs from Elasticsearch...")
-    logs, log_ids = fetch_all_logs_for_demo(es_client, max_logs=2000)
+    logs, log_ids = fetch_all_logs_for_demo(es_client, max_logs=MAX_DEMO_LOGS)
     
     if not logs:
         print("❌ No logs found in Elasticsearch. Please ensure logs are available in the unified-logs index.")
@@ -762,6 +838,11 @@ def run_real_time_service():
     print(f"⏰ Processing interval: {LOOP_DELAY_SECONDS} seconds")
     print("🔄 Service will run continuously. Press Ctrl+C to stop.")
     print("-" * 60)
+    
+    # Validate environment configuration
+    if not validate_environment():
+        print("❌ Environment validation failed. Please check your configuration.")
+        return
     
     # Initialize Elasticsearch connection
     es_client = initialize_elasticsearch()
@@ -821,7 +902,7 @@ if __name__ == "__main__":
         print("  python orchestrator.py --service  # Run real-time service")
         print("")
         print("Demo Mode:")
-        print("  - Processes up to 2000 existing logs from Elasticsearch")
+        print(f"  - Processes up to {MAX_DEMO_LOGS} existing logs from Elasticsearch")
         print("  - Generates comprehensive security intelligence report")
         print("  - Creates incidents in the backend")
         print("")

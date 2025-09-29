@@ -38,16 +38,66 @@ AION currently uses a **2-tier detection pipeline**:
 - **Python 3.8+** - Runtime environment
 - **Docker & Docker Compose** - For easy service deployment
 
-### Quick Setup
+### Environment Configuration
+
+AION uses environment variables for configuration. Follow these steps to set up your environment:
+
+#### 1. Copy Environment Template
 ```bash
-# Start Elasticsearch and Kibana
+# Copy the example environment file
+cp .env.example .env
+```
+
+#### 2. Configure Your Settings
+Edit the `.env` file with your specific configuration:
+
+```bash
+# Required: Groq API Key for AI-powered analysis
+GROQ_API_KEY=your_groq_api_key_here
+
+# Optional: Elasticsearch configuration (defaults work for local setup)
+ELASTICSEARCH_HOST=http://localhost:9200
+UNIFIED_LOGS_INDEX=unified-logs
+INCIDENTS_INDEX=aion-incidents
+
+# Optional: Processing configuration
+BATCH_SIZE=1000
+MAX_DEMO_LOGS=2000
+```
+
+#### 3. Get Your Groq API Key
+1. Visit [Groq Console](https://console.groq.com/keys)
+2. Create an account or sign in
+3. Generate a new API key
+4. Copy the key to your `.env` file
+
+**Note**: The Groq API key is optional but highly recommended. Without it, AION will only use rule-based detection (Tier 1) and skip AI-powered analysis (Tier 3).
+
+### Quick Setup
+
+#### Option 1: Automated Setup (Recommended)
+```bash
+# Run the automated setup script
+python setup.py
+```
+
+#### Option 2: Manual Setup
+```bash
+# 1. Start Elasticsearch and Kibana
 docker-compose up -d
 
-# Install Python dependencies
+# 2. Install Python dependencies
 pip install -r requirements.txt
 
-# Verify Elasticsearch is running
+# 3. Configure environment variables (see above)
+cp .env.example .env
+# Edit .env with your settings
+
+# 4. Verify Elasticsearch is running
 curl http://localhost:9200
+
+# 5. Run the demo
+python run_demo.py
 ```
 
 ## 📊 What the Demo Shows
@@ -132,6 +182,37 @@ After the demo:
 3. **Run Real-Time Mode**: Start continuous monitoring with `python orchestrator.py --service`
 4. **Customize Rules**: Modify detection rules in `tier1_rules.py`
 5. **Train Models**: Improve ML detection with your own data
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Environment Configuration
+- **"GROQ_API_KEY not found"**: Copy `.env.example` to `.env` and add your Groq API key
+- **"Environment validation failed"**: Check that all numeric values in `.env` are valid integers
+- **"No .env file found"**: Run `cp .env.example .env` and configure your settings
+
+#### Elasticsearch Connection
+- **"Failed to connect to Elasticsearch"**: 
+  - Ensure Docker containers are running: `docker-compose ps`
+  - Check Elasticsearch is accessible: `curl http://localhost:9200`
+  - Verify no other service is using port 9200
+
+#### Groq API Issues
+- **"Failed to initialize Groq client"**: 
+  - Verify your API key is correct in `.env`
+  - Check your Groq account has available credits
+  - Ensure you're not hitting rate limits
+
+#### No Logs Found
+- **"No logs found in Elasticsearch"**: 
+  - Run `python setup_elasticsearch_data.py` to populate sample data
+  - Check the `unified-logs` index exists: `curl http://localhost:9200/unified-logs/_count`
+
+### Getting Help
+- Check the console output for detailed error messages
+- Verify all prerequisites are installed and running
+- Ensure your `.env` file is properly configured
 
 ## 🛠️ Configuration
 

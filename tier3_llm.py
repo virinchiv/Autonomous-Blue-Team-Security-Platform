@@ -8,13 +8,25 @@ from dotenv import load_dotenv
 # Load environment variables from your .env file
 load_dotenv()
 
+# Configuration from environment variables
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_TEMPERATURE = float(os.getenv("GROQ_TEMPERATURE", "0.2"))
+GROQ_MAX_TOKENS_ANALYSIS = int(os.getenv("GROQ_MAX_TOKENS_ANALYSIS", "350"))
+GROQ_MAX_TOKENS_REPORT = int(os.getenv("GROQ_MAX_TOKENS_REPORT", "800"))
+
 groq_client = None
-try:
-    # Initialize the Groq client. It will automatically find the API key.
-    groq_client = Groq()
-except Exception:
-    # Defer hard failure; we will provide a graceful fallback in analyze_log_with_llm
-    groq_client = None
+if GROQ_API_KEY:
+    try:
+        # Initialize the Groq client with explicit API key
+        groq_client = Groq(api_key=GROQ_API_KEY)
+        print("✅ Groq LLM client initialized successfully")
+    except Exception as e:
+        print(f"⚠️  Failed to initialize Groq client: {e}")
+        groq_client = None
+else:
+    print("⚠️  GROQ_API_KEY not found. LLM analysis will be disabled.")
+    print("   Set GROQ_API_KEY in your .env file to enable AI-powered threat analysis.")
 
 # Known legitimate bot patterns
 LEGITIMATE_BOTS = [
@@ -240,9 +252,9 @@ def analyze_log_with_llm(log_context: dict):
     try:
         chat_completion = groq_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
-            temperature=0.2,
-            max_tokens=350,
+            model=GROQ_MODEL,
+            temperature=GROQ_TEMPERATURE,
+            max_tokens=GROQ_MAX_TOKENS_ANALYSIS,
             response_format={"type": "json_object"},
         )
         response_text = chat_completion.choices[0].message.content
@@ -354,9 +366,9 @@ Analyze this incident comprehensively and provide a detailed security assessment
     try:
         chat_completion = groq_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
+            model=GROQ_MODEL,
             temperature=0.1,  # Lower temperature for more consistent analysis
-            max_tokens=800,   # Increased for comprehensive reports
+            max_tokens=GROQ_MAX_TOKENS_REPORT,   # Increased for comprehensive reports
             response_format={"type": "json_object"},
         )
         
