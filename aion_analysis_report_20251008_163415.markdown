@@ -1,0 +1,135 @@
+# AION Security Intelligence Analysis Report
+**Generated:** 2025-10-08 16:34:15
+**Analysis Mode:** File-based log analysis
+
+---
+
+## 🎯 Executive Summary
+
+This analysis processed **10** logs from the file `example_data/sample_logs/apache_access_sample.log` and identified **2** security incidents requiring attention.
+
+### 📊 Incident Statistics
+- **Total Incidents:** 2
+- **High Severity:** 0
+- **Medium Severity:** 2
+- **Low Severity:** 0
+
+### 🔍 Processing Statistics
+- **Tier 1 Threats Detected:** 5
+- **LLM-Detected Threats:** 0
+- **Total Threats Processed:** 5
+- **Benign Logs:** 5
+- **Tier 3 Escalations:** 0
+
+---
+
+## 🚨 Security Incidents by Classification
+
+### Coordinated Web Scraping (2 incidents)
+
+#### **INC-1759966453-unknown** (Severity: Medium)
+- **Source IP:** `Unknown`
+- **Event Count:** 0 events
+- **Time Span:** N/A
+- **Involved Hosts:** None
+- **Threat Rules:** Unknown
+- **Confidence Score:** 0.85
+
+**Executive Summary:**
+A potential web scraping incident was detected on 2025-10-08T16:33:56.145783, involving a suspicious GET request with a malicious user agent. The incident is currently under investigation, and further analysis is required to determine the full scope of the activity.
+
+**Attack Timeline:**
+2025-10-08T16:33:56.145783: A suspicious GET request was detected with a malicious user agent and query parameter.
+
+**Recommended Actions:**
+["Review and update the web application's security configuration to prevent similar requests in the future.", 'Implement additional logging and monitoring to detect and respond to similar incidents.', 'Analyze the user agent and query parameter to determine the true nature of the request and potential attacker goals.']
+
+---
+
+#### **INC-1759966453-192-168-1-107** (Severity: Medium)
+- **Source IP:** `Unknown`
+- **Event Count:** 0 events
+- **Time Span:** N/A
+- **Involved Hosts:** None
+- **Threat Rules:** Unknown
+- **Confidence Score:** 0.85
+
+**Executive Summary:**
+A potential web scraping incident was detected on December 25, 2024, at 10:30:22 UTC, involving a single GET request to a suspicious URL. The request was made from IP address 192.168.1.107, using a user agent that may be attempting to disguise its true nature. Further analysis is required to determine the full scope of the incident.
+
+**Attack Timeline:**
+December 25, 2024, at 10:30:22 UTC: A GET request was made to the suspicious URL '<script>alert('xss')</script>' from IP address 192.168.1.107.
+
+**Recommended Actions:**
+['Block IP address 192.168.1.107 at the network perimeter to prevent further access.', 'Review and update web application security configurations to prevent similar attacks in the future.', 'Conduct a thorough analysis of the target system to determine if any data was compromised or exfiltrated.']
+
+---
+
+## 🔧 Methodology
+
+This analysis utilized the AION incident-centric security orchestration workflow:
+
+### 1. **Tier 1 Triage**
+- Processed all logs through predefined threat detection rules
+- Classified logs as THREAT, BENIGN, or UNCLASSIFIED
+- Identified known threat patterns using regex-based rules
+
+### 2. **Tier 3 LLM Analysis**
+- Escalated unclassified logs to AI analysis
+- LLM identified additional threats using natural language processing
+- Applied confidence scoring to minimize false positives
+
+### 3. **Incident Correlation**
+- Grouped related threats by source IP and attack pattern
+- Applied correlation thresholds to create coherent incidents
+- Generated distinct security incidents
+
+### 4. **Comprehensive Analysis**
+- Each incident enriched with AI-powered analysis
+- Generated executive summaries and attack timelines
+- Provided actionable remediation recommendations
+
+---
+
+## 📈 Key Findings
+
+- **Most Common Attack Type:** Coordinated Web Scraping (2 incidents)
+- **Average Events per Incident:** 0.0
+- **Highest Confidence Score:** 0.85
+- **Time Range Analyzed:** N/A
+
+## 🎯 Recommendations
+
+Based on the analysis of the log file:
+
+1. **Immediate Actions:**
+   - Review all High and Medium severity incidents
+   - Implement recommended remediation steps
+   - Monitor identified source IPs for continued activity
+
+2. **System Improvements:**
+   - Consider adjusting correlation thresholds based on findings
+   - Review Tier 1 rules for potential enhancements
+   - Monitor LLM analysis accuracy and adjust confidence thresholds
+
+3. **Ongoing Monitoring:**
+   - Deploy the real-time service for continuous monitoring
+   - Set up alerts for new incidents in the `aion-incidents` index
+   - Regular review of incident trends and patterns
+
+---
+
+## 📋 Technical Details
+
+- **Log File:** `example_data/sample_logs/apache_access_sample.log`
+- **Elasticsearch Index:** `unified-logs`
+- **Incidents Index:** `aion-incidents`
+- **Processing Mode:** File-based Analysis
+- **Logs Processed:** 10
+- **Log Type:** apache_access
+- **File Size:** 1533 bytes
+- **Report Generated:** 2025-10-08 16:34:15
+
+---
+
+*This report was generated by the AION Autonomous Blue Team Agent incident-centric security orchestration system.*

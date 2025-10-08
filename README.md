@@ -1,21 +1,45 @@
 # AION - Autonomous Blue Team Security Platform
 
-An intelligent cybersecurity platform that automatically ingests system and network logs, detects threats using a hybrid ML + rules pipeline, and generates human-readable incident reports with AI-powered analysis.
+An intelligent cybersecurity platform that automatically analyzes log files and detects threats using a hybrid ML + rules pipeline, generating human-readable incident reports with AI-powered analysis.
 
-## 🚀 Quick Start Demo
+## 🚀 Quick Start
 
-The fastest way to see AION in action is to run the demo:
+### Analyze Your Log Files
+The fastest way to see AION in action is to analyze your own log files:
 
 ```bash
-python run_demo.py
+# Analyze Apache access logs
+python aion.py analyze /var/log/apache2/access.log
+
+# Analyze system logs
+python aion.py analyze /var/log/auth.log
+
+# Try the sample logs
+python aion.py analyze example_data/sample_logs/apache_access_sample.log
 ```
 
-This demo will:
-1. **Connect to Elasticsearch** - Verify the backend is running
-2. **Fetch existing logs** - Process up to 2000 logs from your `unified-logs` index
-3. **Run threat detection** - Apply multi-tier analysis (rules + ML + LLM)
-4. **Generate incidents** - Create structured security incidents
-5. **Produce intelligence report** - Generate a comprehensive security report
+### Real-Time Monitoring
+For continuous monitoring of new logs:
+
+```bash
+# Start real-time monitoring
+python aion.py monitor
+```
+
+## 📋 What AION Does
+
+### Log Analysis Mode
+1. **Ingests Log Files** - Automatically detects and parses various log formats
+2. **Normalizes Data** - Converts logs to standardized ECS format
+3. **Detects Threats** - Applies multi-tier analysis (rules + AI)
+4. **Generates Reports** - Creates comprehensive security intelligence reports
+5. **Stores Results** - Keeps data in Elasticsearch for further analysis
+
+### Real-Time Monitoring Mode
+1. **Continuous Scanning** - Monitors Elasticsearch for new logs
+2. **Real-Time Analysis** - Processes logs as they arrive
+3. **Incident Creation** - Automatically creates security incidents
+4. **Live Updates** - Provides real-time threat detection
 
 ## 🏗️ Architecture Overview
 
@@ -78,7 +102,7 @@ MAX_DEMO_LOGS=2000
 #### Option 1: Automated Setup (Recommended)
 ```bash
 # Run the automated setup script
-python setup.py
+python aion.py setup
 ```
 
 #### Option 2: Manual Setup
@@ -96,36 +120,36 @@ cp .env.example .env
 # 4. Verify Elasticsearch is running
 curl http://localhost:9200
 
-# 5. Run the demo
-python run_demo.py
+# 5. Analyze your first log file
+python aion.py analyze examples/sample_logs/apache_access_sample.log
 ```
 
-## 📊 What the Demo Shows
+## 📊 What AION Detects
 
-When you run `python run_demo.py`, you'll see:
+### 1. **Web Application Attacks**
+- **SQL Injection**: `' OR '1'='1`, UNION SELECT patterns
+- **Cross-Site Scripting (XSS)**: `<script>` tags, event handlers
+- **Directory Traversal**: `../../../etc/passwd` attempts
+- **Command Injection**: System command execution attempts
+- **SSRF**: Server-side request forgery patterns
 
-### 1. **Log Processing**
-- Ingests logs from multiple sources (Apache, Linux syslog, network flows)
-- Normalizes data into ECS (Elastic Common Schema) format
-- Applies real-time threat detection rules
+### 2. **System Compromises**
+- **SSH Brute Force**: Multiple failed login attempts
+- **Privilege Escalation**: Sudo usage patterns
+- **Service Failures**: System service crashes and errors
+- **Authentication Bypass**: Invalid user attempts
 
-### 2. **Threat Detection**
-- **Web Attacks**: SQL injection, directory traversal, XSS attempts
-- **Network Intrusions**: Port scans, DDoS patterns, bot traffic
-- **System Compromises**: SSH brute force, privilege escalation, service failures
-- **Anomalous Behavior**: Unusual traffic patterns, suspicious user activity
+### 3. **Network Intrusions**
+- **Port Scanning**: Reconnaissance activities
+- **DDoS Patterns**: High-volume traffic anomalies
+- **Bot Traffic**: Automated scanner signatures
+- **Lateral Movement**: Internal network reconnaissance
 
-### 3. **Incident Generation**
-- **Correlated Events**: Groups related attacks into coherent incidents
-- **Severity Assessment**: Critical, High, Medium, Low classifications
-- **Timeline Analysis**: Shows attack progression over time
-- **Evidence Collection**: Preserves original logs for forensic analysis
-
-### 4. **Intelligence Reporting**
-- **Executive Summary**: High-level overview for management
-- **Technical Details**: Deep dive for security analysts
-- **Actionable Recommendations**: Specific steps to remediate threats
-- **Confidence Scoring**: AI confidence in threat classification
+### 4. **Anomalous Behavior**
+- **Unusual Traffic Patterns**: Statistical anomalies
+- **Suspicious User Activity**: Abnormal access patterns
+- **Data Exfiltration**: Unusual data transfer patterns
+- **Policy Violations**: Security policy breaches
 
 ## 🎯 Key Features
 
@@ -173,15 +197,38 @@ After running the demo, you'll get:
 - **50-69%**: Moderate confidence, requires human review
 - **Below 50%**: Low confidence, likely false positive
 
-## 🚀 Next Steps
+## 🚀 Usage Examples
 
-After the demo:
+### Analyze Log Files
+```bash
+# Basic analysis
+python aion.py analyze /var/log/apache2/access.log
 
-1. **Review the Report**: Check the generated security intelligence report
-2. **Explore Kibana**: Visualize incidents and trends in the web interface
-3. **Run Real-Time Mode**: Start continuous monitoring with `python orchestrator.py --service`
-4. **Customize Rules**: Modify detection rules in `tier1_rules.py`
-5. **Train Models**: Improve ML detection with your own data
+# Generate HTML report
+python aion.py analyze /var/log/auth.log --format html
+
+# Keep data in Elasticsearch for further analysis
+python aion.py analyze /var/log/nginx/access.log --keep-data
+
+# Clean up after analysis
+python aion.py analyze /var/log/syslog --cleanup
+```
+
+### Real-Time Monitoring
+```bash
+# Start monitoring with default settings
+python aion.py monitor
+
+# Custom monitoring interval and batch size
+python aion.py monitor --interval 60 --batch-size 500
+```
+
+### Next Steps
+1. **Review Reports**: Check generated security intelligence reports
+2. **Explore Kibana**: Visualize incidents at http://localhost:5601
+3. **Customize Rules**: Modify detection rules in `core/tier1_rules.py`
+4. **Process More Logs**: Analyze additional log files
+5. **Set Up Monitoring**: Configure log ingestion for real-time monitoring
 
 ## 🔧 Troubleshooting
 
@@ -214,17 +261,40 @@ After the demo:
 - Verify all prerequisites are installed and running
 - Ensure your `.env` file is properly configured
 
+## 📁 Project Structure
+
+```
+aion/
+├── aion.py                    # Main CLI interface
+├── core/                      # Core security analysis components
+│   ├── orchestrator.py        # Main orchestration logic
+│   ├── tier1_rules.py         # Rule-based detection
+│   ├── tier3_llm.py          # AI-powered analysis
+│   └── ingestion/            # Log parsing and normalization
+├── cli/                       # Command-line interface modules
+│   ├── analyze.py            # Log analysis mode
+│   └── monitor.py            # Real-time monitoring mode
+├── utils/                     # Utility functions
+│   └── log_processor.py      # Enhanced log processing
+├── examples/                  # Sample data and examples
+│   └── sample_logs/          # Sample log files for testing
+├── .env.example              # Environment configuration template
+├── docker-compose.yml        # Elasticsearch and Kibana setup
+└── requirements.txt          # Python dependencies
+```
+
 ## 🛠️ Configuration
 
-### Elasticsearch Settings
-- **Host**: `http://localhost:9200` (configurable in `orchestrator.py`)
-- **Indices**: `unified-logs` (input), `aion-incidents` (output)
-- **Batch Size**: 1000 logs per processing cycle
+### Environment Variables
+- **GROQ_API_KEY**: AI-powered analysis (optional but recommended)
+- **ELASTICSEARCH_HOST**: Elasticsearch connection (default: localhost:9200)
+- **BATCH_SIZE**: Processing batch size (default: 1000)
+- **MAX_DEMO_LOGS**: Maximum logs per analysis (default: 2000)
 
-### Detection Thresholds
+### Detection Settings
 - **Correlation Window**: 5 minutes for related events
 - **Alert Thresholds**: Configurable per attack type
-- **Processing Limit**: 2000 logs per demo run (for performance)
+- **Processing Limits**: Configurable via environment variables
 
 ## 📚 Technical Details
 
@@ -253,6 +323,23 @@ This is an autonomous security platform designed to demonstrate AI-powered threa
 
 See [LICENSE](LICENSE) file for details.
 
+## 🎯 MVP Features
+
+### ✅ What's Included
+- **Log File Analysis**: Process any log file format (Apache, syslog, JSON, CSV)
+- **AI-Powered Detection**: Groq LLM integration for intelligent threat analysis
+- **Real-Time Monitoring**: Continuous monitoring of Elasticsearch for new logs
+- **Multiple Report Formats**: Markdown, JSON, and HTML reports
+- **Easy Setup**: One-command setup with Docker
+- **Sample Data**: Ready-to-use sample log files for testing
+
+### 🚀 Ready for Production
+- **Environment Management**: Secure API key handling
+- **Error Handling**: Graceful error recovery and logging
+- **Scalable Architecture**: Modular design for easy extension
+- **Professional CLI**: Clean command-line interface
+- **Comprehensive Documentation**: Detailed setup and usage guides
+
 ---
 
-**Ready to see AION in action? Run `python run_demo.py` and watch your autonomous blue team agent detect threats in real-time!** 🛡️
+**Ready to analyze your logs? Run `python aion.py analyze examples/sample_logs/apache_access_sample.log` and see AION detect threats in your data!** 🛡️
