@@ -1,0 +1,18 @@
+{
+  "policy": {
+    "_meta": {"description": "AION ILM for unified logs: keep 30d, then delete"},
+    "phases": {
+      "hot": {
+        "actions": {
+          "set_priority": {"priority": 100}
+        }
+      },
+      "delete": {
+        "min_age": "30d",
+        "actions": {
+          "delete": {}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "index_patterns": [
+    "aion-incidents*"
+  ],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "aion-incidents-policy"
+    },
+    "mappings": {
+      "dynamic": true,
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "incident_id": { "type": "keyword" },
+        "severity": { "type": "keyword" },
+        "confidence": { "type": "float" },
+        "category": { "type": "keyword" },
+        "title": { "type": "text" },
+        "summary": { "type": "text" },
+        "tags": { "type": "keyword" },
+        "related_logs": { "type": "keyword" },
+        "triage": { "type": "object", "enabled": true },
+        "llm": { "type": "object", "enabled": true },
+        "entities": {
+          "properties": {
+            "source.ip": { "type": "ip" },
+            "destination.ip": { "type": "ip" },
+            "user.name": { "type": "keyword" }
+          }
+        }
+      }
+    }
+  },
+  "priority": 500,
+  "_meta": { "description": "AION incidents template" }
+}

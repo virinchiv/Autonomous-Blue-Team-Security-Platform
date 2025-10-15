@@ -1,4 +1,4 @@
-# AION - Autonomous Blue Team Security Platform
+# LogShield AI - Intelligent Log Analysis & Threat Detection
 
 An intelligent cybersecurity platform that automatically analyzes log files and detects threats using a hybrid ML + rules pipeline, generating human-readable incident reports with AI-powered analysis.
 
@@ -49,6 +49,9 @@ AION currently uses a **2-tier detection pipeline**:
 - **Fast pattern matching** for known attack signatures
 - **Correlation rules** to detect multi-step attacks
 - **Threshold-based alerts** for suspicious behavior patterns
+
+### Tier 2 (Under Development): ML-Powered Detection
+- **Machine learning** for anomaly detection
 
 ### Tier 3: LLM-Powered Intelligence
 - **Contextual analysis** of complex attack scenarios
@@ -343,3 +346,74 @@ See [LICENSE](LICENSE) file for details.
 ---
 
 **Ready to analyze your logs? Run `python aion.py analyze examples/sample_logs/apache_access_sample.log` and see AION detect threats in your data!** 🛡️
+
+---
+
+## 📦 Filebeat Usage (Log Shipping)
+
+Use the sample Filebeat configuration to ship Apache, Nginx, and System logs into Elasticsearch with `aion.status=pending` so AION can process them in real time.
+
+```
+# 1) Edit paths and credentials in filebeat/filebeat.yml
+
+# 2) Set environment variables (optional if using secure ES)
+export ELASTICSEARCH_HOSTS=http://localhost:9200
+export ELASTICSEARCH_USERNAME=elastic
+export ELASTICSEARCH_PASSWORD=changeme
+
+# 3) Start Filebeat (installation varies by OS)
+sudo filebeat modules enable apache nginx system
+sudo filebeat -e -c filebeat/filebeat.yml
+
+# 4) Verify data in Elasticsearch
+curl "$ELASTICSEARCH_HOSTS/unified-logs/_count?pretty"
+```
+
+Notes:
+- Events are tagged with `aion.status=pending` so `monitor` mode can pick them up.
+- All logs land in the `unified-logs` index by default.
+
+## 🗂️ Index Templates & ILM (Optional)
+
+To add guardrails around mappings and retention, apply the included index templates and optional ILM policies.
+
+```
+# Create ILM policies (optional)
+curl -X PUT "$ELASTICSEARCH_HOSTS/_ilm/policy/aion-unified-logs-policy" \
+  -H 'Content-Type: application/json' \
+  -d @elasticsearch/ilm/aion-unified-logs-policy.json
+
+curl -X PUT "$ELASTICSEARCH_HOSTS/_ilm/policy/aion-incidents-policy" \
+  -H 'Content-Type: application/json' \
+  -d @elasticsearch/ilm/aion-incidents-policy.json
+
+# Create index templates
+curl -X PUT "$ELASTICSEARCH_HOSTS/_index_template/unified-logs-template" \
+  -H 'Content-Type: application/json' \
+  -d @elasticsearch/templates/unified-logs-template.json
+
+curl -X PUT "$ELASTICSEARCH_HOSTS/_index_template/aion-incidents-template" \
+  -H 'Content-Type: application/json' \
+  -d @elasticsearch/templates/aion-incidents-template.json
+```
+
+Files:
+- `elasticsearch/templates/unified-logs-template.json`
+- `elasticsearch/templates/aion-incidents-template.json`
+- `elasticsearch/ilm/aion-unified-logs-policy.json` (optional)
+- `elasticsearch/ilm/aion-incidents-policy.json` (optional)
+
+## 📊 Kibana Dashboards (Optional)
+
+Import the starter data view and dashboard for quick visualization.
+
+```
+# Import saved objects
+curl -X POST "$ELASTICSEARCH_HOSTS/_security/user/_has_privileges" -H 'kbn-xsrf: true' || true
+curl -X POST "http://localhost:5601/api/saved_objects/_import" \
+  -H 'kbn-xsrf: true' \
+  --form file=@kibana/saved_objects.ndjson
+```
+
+Files:
+- `kibana/saved_objects.ndjson`

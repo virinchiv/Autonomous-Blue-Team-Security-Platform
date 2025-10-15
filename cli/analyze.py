@@ -17,7 +17,9 @@ from core.orchestrator import (
     validate_environment, 
     initialize_elasticsearch, 
     process_logs_batch,
-    generate_demo_report
+    generate_demo_report,
+    UNIFIED_LOGS_INDEX,
+    INCIDENTS_INDEX
 )
 from utils.log_processor import LogProcessor
 
@@ -49,7 +51,7 @@ def run_analysis(logfile_path: Path, args) -> bool:
         
         # Step 3: Process log file
         print("📁 Processing log file...")
-        processor = LogProcessor(es_client)
+        processor = LogProcessor(es_client, index_name=UNIFIED_LOGS_INDEX)
         processing_stats = processor.process_log_file(logfile_path)
         
         if not processing_stats['success']:
@@ -110,23 +112,49 @@ def run_threat_analysis(es_client, processing_stats: dict) -> dict:
         # Limit the query size to avoid Elasticsearch limits
         max_size = min(processing_stats['uploaded_count'], 10000)
         
-        query = {
-            "query": {
-                "bool": {
-                    "must": [
-                        {"exists": {"field": "aion"}},
-                        {"term": {"aion.status.keyword": "pending"}},
-                        {"term": {"aion.source_file.keyword": processing_stats['file_path']}}
-                    ]
-                }
-            },
-            "size": max_size,
-            "sort": [{"@timestamp": {"order": "desc"}}]  # Get most recent logs first
-        }
+        # Force index refresh to ensure logs are available
+        es_client.indices.refresh(index=UNIFIED_LOGS_INDEX)
         
-        response = es_client.search(index="unified-logs", body=query)
-        logs = [hit['_source'] for hit in response['hits']['hits']]
-        log_ids = [hit['_id'] for hit in response['hits']['hits']]
+        # Try multiple query approaches to find the logs
+        queries_to_try = [
+            # Original query
+            {
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"exists": {"field": "aion.status"}},
+                            {"term": {"aion.status": "pending"}},
+                            {"term": {"aion.source_file": processing_stats['file_path']}}
+                        ]
+                    }
+                },
+                "size": max_size,
+                "sort": [{"@timestamp": {"order": "desc"}}]
+            },
+            # Fallback: just pending logs (recent ones)
+            {
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"exists": {"field": "aion.status"}},
+                            {"term": {"aion.status": "pending"}}
+                        ]
+                    }
+                },
+                "size": max_size,
+                "sort": [{"@timestamp": {"order": "desc"}}]
+            }
+        ]
+        
+        logs = []
+        log_ids = []
+        
+        for query in queries_to_try:
+            response = es_client.search(index=UNIFIED_LOGS_INDEX, body=query)
+            if response["hits"]["total"]["value"] > 0:
+                logs = [hit['_source'] for hit in response['hits']['hits']]
+                log_ids = [hit['_id'] for hit in response['hits']['hits']]
+                break
         
         # Inform user about analysis scope
         total_logs = processing_stats['uploaded_count']
@@ -415,9 +443,11 @@ Based on the analysis of the log file:
 
 """
     
+    from core.orchestrator import INCIDENTS_INDEX
+    
     report += f"""- **Log File:** `{logfile_path}`
-- **Elasticsearch Index:** `unified-logs`
-- **Incidents Index:** `aion-incidents`
+- **Elasticsearch Index:** `{UNIFIED_LOGS_INDEX}`
+- **Incidents Index:** `{INCIDENTS_INDEX}`
 - **Processing Mode:** File-based Analysis
 - **Logs Processed:** {total_logs}
 - **Log Type:** {processing_stats.get('log_type', 'Unknown')}
@@ -547,7 +577,7 @@ def cleanup_processed_data(es_client, processing_stats: dict):
         }
         
         response = es_client.delete_by_query(
-            index="unified-logs",
+            index=UNIFIED_LOGS_INDEX,
             body=query,
             wait_for_completion=True
         )

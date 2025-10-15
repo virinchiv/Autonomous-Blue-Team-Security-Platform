@@ -99,6 +99,38 @@ class LogNormalizer:
                 ecs_log['event.category'] = 'security'
                 ecs_log['event.type'] = 'threat'
                 
+        elif log_type == 'zeek_conn' and parsed_log:
+            # Timestamp from Zeek 'ts' (epoch seconds float)
+            ts = parsed_log.get('ts')
+            try:
+                if isinstance(ts, (int, float)):
+                    ecs_log['@timestamp'] = datetime.fromtimestamp(float(ts)).isoformat()
+            except Exception:
+                pass
+            # Map Zeek connection fields to ECS
+            ecs_log['source.ip'] = parsed_log.get('id.orig_h')
+            ecs_log['destination.ip'] = parsed_log.get('id.resp_h')
+            ecs_log['source.port'] = parsed_log.get('id.orig_p')
+            ecs_log['destination.port'] = parsed_log.get('id.resp_p')
+            ecs_log['network.transport'] = (parsed_log.get('proto') or '').lower()
+            ecs_log['source.bytes'] = parsed_log.get('orig_bytes')
+            ecs_log['destination.bytes'] = parsed_log.get('resp_bytes')
+            # Total bytes if available
+            try:
+                ob = parsed_log.get('orig_bytes') or 0
+                rb = parsed_log.get('resp_bytes') or 0
+                ecs_log['network.bytes'] = ob + rb
+            except Exception:
+                pass
+            # Duration in seconds (ECS typically uses nanoseconds; keep seconds for MVP)
+            if parsed_log.get('duration') is not None:
+                ecs_log['event.duration'] = parsed_log.get('duration')
+            # Connection state if present
+            if parsed_log.get('conn_state'):
+                ecs_log['network.direction'] = parsed_log.get('conn_state')
+            ecs_log['event.category'] = 'network'
+            ecs_log['event.type'] = 'connection'
+            
         elif log_type == 'linux_syslog' and parsed_log:
             ecs_log['host.name'] = parsed_log.get('host')
             ecs_log['process.name'] = parsed_log.get('process')

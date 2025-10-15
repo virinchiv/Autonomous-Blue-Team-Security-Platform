@@ -1,0 +1,101 @@
+# Sample Filebeat configuration for AION
+# Ships Apache, Nginx, and System (syslog/auth) logs into Elasticsearch
+# and tags each event with aion.status=pending so AION can pick them up.
+
+#=========================== Filebeat inputs =============================
+# For most users, using modules is preferred (see below). Inputs are shown as a fallback.
+#filebeat.inputs:
+#- type: filestream
+#  id: nginx-access
+#  enabled: false
+#  paths:
+#    - /var/log/nginx/access.log*
+#  processors:
+#    - add_fields:
+#        target: aion
+#        fields:
+#          status: pending
+#          log_type: nginx
+#
+#- type: filestream
+#  id: apache-access
+#  enabled: false
+#  paths:
+#    - /var/log/apache2/access.log*
+#    - /var/log/httpd/access_log*
+#  processors:
+#    - add_fields:
+#        target: aion
+#        fields:
+#          status: pending
+#          log_type: apache_access
+#
+#- type: filestream
+#  id: system-logs
+#  enabled: false
+#  paths:
+#    - /var/log/syslog
+#    - /var/log/auth.log
+#    - /var/log/messages
+#  processors:
+#    - add_fields:
+#        target: aion
+#        fields:
+#          status: pending
+#          log_type: linux_syslog
+
+#============================= Filebeat modules ===============================
+filebeat.modules:
+  - module: apache
+    access:
+      enabled: true
+      var.paths: ["/var/log/apache2/access.log*", "/var/log/httpd/access_log*"]
+    error:
+      enabled: true
+      var.paths: ["/var/log/apache2/error.log*", "/var/log/httpd/error_log*"]
+
+  - module: nginx
+    access:
+      enabled: true
+      var.paths: ["/var/log/nginx/access.log*"]
+    error:
+      enabled: false
+
+  - module: system
+    syslog:
+      enabled: true
+      var.paths: ["/var/log/syslog", "/var/log/messages"]
+    auth:
+      enabled: true
+      var.paths: ["/var/log/auth.log", "/var/log/secure"]
+
+#=========================== Processors ======================================
+processors:
+  - add_fields:
+      target: aion
+      fields:
+        status: pending
+  - add_host_metadata: ~
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+
+#============================= Output ========================================
+output.elasticsearch:
+  hosts: ["${ELASTICSEARCH_HOSTS:http://localhost:9200}"]
+  # If security is enabled on Elasticsearch, set credentials via env vars
+  username: ${ELASTICSEARCH_USERNAME:}
+  password: ${ELASTICSEARCH_PASSWORD:}
+  # Send all events to a single index so AION can monitor one place
+  index: unified-logs
+
+# Ensure the index exists and has mappings. Let Elasticsearch handle dynamic mapping for MVP.
+setup.template.enabled: true
+setup.template.overwrite: false
+setup.template.name: "unified-logs"
+setup.template.pattern: "unified-logs*"
+
+#============================= Logging =======================================
+logging.level: info
+logging.to_files: true
+logging.files:
+  rotateeverybytes: 10485760

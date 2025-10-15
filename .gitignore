@@ -84,6 +84,7 @@ coverage.xml
 # Test files
 .pytest_cache/
 .tox/
+tests/
 
 # Temporary files
 *.tmp

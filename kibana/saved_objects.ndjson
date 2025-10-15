@@ -1,0 +1,2 @@
+{"type":"index-pattern","id":"unified-logs-data-view","attributes":{"title":"unified-logs*","timeFieldName":"@timestamp","fieldAttrs":"{}","fields":"[]","sourceFilters":"[]","typeMeta":"{}","name":"Unified Logs"}}
+{"type":"dashboard","id":"aion-overview-dashboard","attributes":{"title":"AION Overview","description":"Starter dashboard for AION logs and incidents","panelsJSON":"[]","optionsJSON":"{\"useMargins\":true,\"syncColors\":false,\"syncCursor\":true,\"syncTooltips\":true}","version":1},"references":[],"migrationVersion":{"dashboard":"8.9.0"}}

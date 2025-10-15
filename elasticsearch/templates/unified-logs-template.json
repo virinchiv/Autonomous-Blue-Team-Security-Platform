@@ -1,0 +1,46 @@
+{
+  "index_patterns": [
+    "unified-logs*"
+  ],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "aion-unified-logs-policy"
+    },
+    "mappings": {
+      "dynamic": true,
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "message": { "type": "text" },
+        "aion": {
+          "properties": {
+            "status": { "type": "keyword" },
+            "source_file": { "type": "keyword" },
+            "log_type": { "type": "keyword" }
+          }
+        },
+        "event": {
+          "properties": {
+            "category": { "type": "keyword" },
+            "type": { "type": "keyword" },
+            "duration": { "type": "float" }
+          }
+        },
+        "http": {
+          "properties": {
+            "request": { "properties": { "method": { "type": "keyword" } } },
+            "response": { "properties": { "status_code": { "type": "integer" } } }
+          }
+        },
+        "url": { "properties": { "path": { "type": "keyword" }, "domain": { "type": "keyword" } } },
+        "user_agent": { "properties": { "original": { "type": "keyword" } } },
+        "source": { "properties": { "ip": { "type": "ip" }, "port": { "type": "integer" }, "bytes": { "type": "long" } } },
+        "destination": { "properties": { "ip": { "type": "ip" }, "port": { "type": "integer" }, "bytes": { "type": "long" } } },
+        "network": { "properties": { "transport": { "type": "keyword" }, "bytes": { "type": "long" }, "direction": { "type": "keyword" } } }
+      }
+    }
+  },
+  "priority": 500,
+  "_meta": { "description": "AION unified logs template" }
+}

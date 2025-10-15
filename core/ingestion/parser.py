@@ -36,6 +36,9 @@ class LogParser:
             # Check for Apache error log format
             if self._is_apache_error_log(line):
                 parsed_log = self._parse_apache_error_log(line)
+            # Check for Nginx access log format
+            elif self._is_nginx_access_log(line):
+                parsed_log = self.parse_nginx_log(line)
             # Check for Apache access log format (web server logs)
             elif self._is_apache_access_log(line):
                 parsed_log = self._parse_apache_access_log(line)
@@ -84,13 +87,18 @@ class LogParser:
     
     def _detect_log_type(self, line: str, filepath: str) -> str:
         """Detect log type based on content and filename"""
+        if 'nginx' in filepath.lower():
+            if self._is_nginx_access_log(line):
+                return 'nginx'
         if 'apache' in filepath.lower():
             if self._is_apache_error_log(line):
                 return 'apache_error'
             elif self._is_apache_access_log(line):
                 return 'apache_access'
         elif 'access' in filepath.lower():
-            if self._is_apache_access_log(line):
+            if self._is_nginx_access_log(line):
+                return 'nginx'
+            elif self._is_apache_access_log(line):
                 return 'apache_access'
         elif 'linux' in filepath.lower() or 'auth' in filepath.lower():
             return 'linux_syslog'
@@ -98,6 +106,10 @@ class LogParser:
             return 'nginx'
         else:
             return 'syslog'
+    
+    def _is_nginx_access_log(self, line: str) -> bool:
+        """Check if line matches Nginx combined access log format"""
+        return bool(re.match(r'^\S+\s+\S+\s+\S+\s+\[.*?\]\s+"[A-Z]+\s+\S+\s+\S+"\s+\d{3}\s+\d+\s+".*?"\s+".*?"', line))
     
     def _parse_apache_error_log(self, line: str) -> dict:
         """Parse Apache error log format: [timestamp] [level] message"""

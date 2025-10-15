@@ -1,0 +1,18 @@
+{
+  "policy": {
+    "_meta": {"description": "AION ILM for incidents: keep 90d, then delete"},
+    "phases": {
+      "hot": {
+        "actions": {
+          "set_priority": {"priority": 100}
+        }
+      },
+      "delete": {
+        "min_age": "90d",
+        "actions": {
+          "delete": {}
+        }
+      }
+    }
+  }
+}

@@ -16,7 +16,9 @@ from core.orchestrator import (
     validate_environment, 
     initialize_elasticsearch, 
     process_logs_batch,
-    fetch_pending_logs_from_elasticsearch
+    fetch_pending_logs_from_elasticsearch,
+    UNIFIED_LOGS_INDEX,
+    INCIDENTS_INDEX
 )
 
 
@@ -217,15 +219,15 @@ def get_monitoring_status(es_client) -> dict:
             }
         }
         
-        pending_response = es_client.count(index="unified-logs", body=pending_query)
+        pending_response = es_client.count(index=UNIFIED_LOGS_INDEX, body=pending_query)
         pending_count = pending_response['count']
         
         # Get total logs count
-        total_response = es_client.count(index="unified-logs")
+        total_response = es_client.count(index=UNIFIED_LOGS_INDEX)
         total_logs = total_response['count']
         
         # Get incidents count
-        incidents_response = es_client.count(index="aion-incidents")
+        incidents_response = es_client.count(index=INCIDENTS_INDEX)
         total_incidents = incidents_response['count']
         
         return {
