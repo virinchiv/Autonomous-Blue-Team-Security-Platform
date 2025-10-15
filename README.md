@@ -8,12 +8,6 @@ An intelligent cybersecurity platform that automatically analyzes log files and 
 The fastest way to see AION in action is to analyze your own log files:
 
 ```bash
-# Analyze Apache access logs
-python aion.py analyze /var/log/apache2/access.log
-
-# Analyze system logs
-python aion.py analyze /var/log/auth.log
-
 # Try the sample logs
 python aion.py analyze example_data/sample_logs/apache_access_sample.log
 ```
@@ -74,10 +68,6 @@ AION currently uses a **2-tier detection pipeline**:
 - **Scalable Architecture**: Modular design for easy extension
 - **Professional CLI**: Clean command-line interface
 - **Comprehensive Documentation**: Detailed setup and usage guides
-
----
-**Ready to analyze your logs? Run `python aion.py analyze YOUR_LOG_FILE_PATH` and see AION detect threats in your data!** 🛡️
----
 
 ## 🛠️ Configuration
 
