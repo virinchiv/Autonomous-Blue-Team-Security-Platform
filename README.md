@@ -58,6 +58,40 @@ AION currently uses a **2-tier detection pipeline**:
 - **Natural language explanations** of security incidents
 - **Executive summaries** and actionable recommendations
 
+## 🎯 MVP Features
+
+### ✅ What's Included
+- **Log File Analysis**: Process any log file format (Apache, syslog, JSON, CSV)
+- **AI-Powered Detection**: Groq LLM integration for intelligent threat analysis
+- **Real-Time Monitoring**: Continuous monitoring of Elasticsearch for new logs
+- **Multiple Report Formats**: Markdown, JSON, and HTML reports
+- **Easy Setup**: One-command setup with Docker
+- **Sample Data**: Ready-to-use sample log files for testing
+
+### 🚀 Ready for Production
+- **Environment Management**: Secure API key handling
+- **Error Handling**: Graceful error recovery and logging
+- **Scalable Architecture**: Modular design for easy extension
+- **Professional CLI**: Clean command-line interface
+- **Comprehensive Documentation**: Detailed setup and usage guides
+
+---
+**Ready to analyze your logs? Run `python aion.py analyze YOUR_LOG_FILE_PATH` and see AION detect threats in your data!** 🛡️
+---
+
+## 🛠️ Configuration
+
+### Environment Variables
+- **GROQ_API_KEY**: AI-powered analysis
+- **ELASTICSEARCH_HOST**: Elasticsearch connection (default: localhost:9200)
+- **BATCH_SIZE**: Processing batch size (default: 1000)
+- **MAX_DEMO_LOGS**: Maximum logs per analysis (default: 2000)
+
+### Detection Settings
+- **Correlation Window**: 5 minutes for related events
+- **Alert Thresholds**: Configurable per attack type
+- **Processing Limits**: Configurable via environment variables
+
 ## 🔧 Prerequisites
 
 ### Required Services
@@ -286,38 +320,6 @@ aion/
 └── requirements.txt          # Python dependencies
 ```
 
-## 🛠️ Configuration
-
-### Environment Variables
-- **GROQ_API_KEY**: AI-powered analysis (optional but recommended)
-- **ELASTICSEARCH_HOST**: Elasticsearch connection (default: localhost:9200)
-- **BATCH_SIZE**: Processing batch size (default: 1000)
-- **MAX_DEMO_LOGS**: Maximum logs per analysis (default: 2000)
-
-### Detection Settings
-- **Correlation Window**: 5 minutes for related events
-- **Alert Thresholds**: Configurable per attack type
-- **Processing Limits**: Configurable via environment variables
-
-## 📚 Technical Details
-
-### Detection Pipeline
-```
-Raw Logs → Normalization → Tier 1 Rules → Tier 2 ML → Tier 3 LLM → Incidents
-```
-
-### Supported Attack Types
-- **Web Application Attacks**: OWASP Top 10 patterns
-- **Network Intrusions**: Port scans, DDoS, botnets
-- **System Compromises**: Privilege escalation, service abuse
-- **Data Exfiltration**: Unusual data transfer patterns
-- **Lateral Movement**: Internal network reconnaissance
-
-### ML Models
-- **Random Forest**: Anomaly detection in network flows
-- **XGBoost**: Classification of suspicious activities
-- **LSTM**: Sequence analysis for attack patterns
-
 ## 🤝 Contributing
 
 This is an autonomous security platform designed to demonstrate AI-powered threat detection. The system is built with modularity in mind, allowing easy extension of detection rules, ML models, and analysis capabilities.
@@ -326,28 +328,6 @@ This is an autonomous security platform designed to demonstrate AI-powered threa
 
 See [LICENSE](LICENSE) file for details.
 
-## 🎯 MVP Features
-
-### ✅ What's Included
-- **Log File Analysis**: Process any log file format (Apache, syslog, JSON, CSV)
-- **AI-Powered Detection**: Groq LLM integration for intelligent threat analysis
-- **Real-Time Monitoring**: Continuous monitoring of Elasticsearch for new logs
-- **Multiple Report Formats**: Markdown, JSON, and HTML reports
-- **Easy Setup**: One-command setup with Docker
-- **Sample Data**: Ready-to-use sample log files for testing
-
-### 🚀 Ready for Production
-- **Environment Management**: Secure API key handling
-- **Error Handling**: Graceful error recovery and logging
-- **Scalable Architecture**: Modular design for easy extension
-- **Professional CLI**: Clean command-line interface
-- **Comprehensive Documentation**: Detailed setup and usage guides
-
----
-
-**Ready to analyze your logs? Run `python aion.py analyze examples/sample_logs/apache_access_sample.log` and see AION detect threats in your data!** 🛡️
-
----
 
 ## 📦 Filebeat Usage (Log Shipping)
 
