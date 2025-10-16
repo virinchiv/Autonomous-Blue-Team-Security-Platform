@@ -1,11 +1,11 @@
 # LogShield AI - Intelligent Log Analysis & Threat Detection
 
-An intelligent cybersecurity platform that automatically analyzes log files and detects threats using a hybrid ML + rules pipeline, generating human-readable incident reports with AI-powered analysis.
+An intelligent cybersecurity platform that automatically analyzes log files and detects threats using a hybrid rules + ML + LLM pipeline, generating human-readable incident reports with AI-powered analysis.
 
 ## 🚀 Quick Start
 
 ### Analyze Your Log Files
-The fastest way to see AION in action is to analyze your own log files:
+The fastest way to see the system in action is to analyze your own log files:
 
 ```bash
 # Try the sample logs
@@ -20,7 +20,7 @@ For continuous monitoring of new logs:
 python aion.py monitor
 ```
 
-## 📋 What AION Does
+## 📋 What LogShield AI Does
 
 ### Log Analysis Mode
 1. **Ingests Log Files** - Automatically detects and parses various log formats
@@ -37,7 +37,7 @@ python aion.py monitor
 
 ## 🏗️ Architecture Overview
 
-AION currently uses a **2-tier detection pipeline**:
+Currently uses a **2-tier detection pipeline**:
 
 ### Tier 1: Rule-Based Detection
 - **Fast pattern matching** for known attack signatures
@@ -91,7 +91,7 @@ AION currently uses a **2-tier detection pipeline**:
 
 ### Environment Configuration
 
-AION uses environment variables for configuration. Follow these steps to set up your environment:
+Uses environment variables for configuration. Follow these steps to set up your environment:
 
 #### 1. Copy Environment Template
 ```bash
@@ -122,8 +122,7 @@ MAX_DEMO_LOGS=2000
 3. Generate a new API key
 4. Copy the key to your `.env` file
 
-**Note**: The Groq API key is optional but highly recommended. Without it, AION will only use rule-based detection (Tier 1) and skip AI-powered analysis (Tier 3).
-
+**Note**: The Groq API key is optional but highly recommended.
 ### Quick Setup
 
 #### Option 1: Automated Setup (Recommended)
@@ -151,7 +150,7 @@ curl http://localhost:9200
 python aion.py analyze examples/sample_logs/apache_access_sample.log
 ```
 
-## 📊 What AION Detects
+## 📊 What LogShield AI Detects
 
 ### 1. **Web Application Attacks**
 - **SQL Injection**: `' OR '1'='1`, UNION SELECT patterns
