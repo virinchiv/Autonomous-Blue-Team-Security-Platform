@@ -1,121 +1,40 @@
-# AION Examples
+# LogShield AI Examples
 
-This directory contains example log files and usage examples for the AION Security Platform.
+This directory contains example log files for testing and demonstration purposes.
 
 ## 📁 Sample Log Files
 
 ### Small Sample Files (Quick Testing)
-### `sample_logs/apache_access_sample.log`
-- **Format**: Apache access log
-- **Content**: Web server access logs with various attack patterns
-- **Threats**: Directory traversal, SQL injection, XSS attempts
-- **Usage**: `python aion.py analyze example_data/sample_logs/apache_access_sample.log`
-
-### `sample_logs/syslog_sample.log`
-- **Format**: Linux syslog
-- **Content**: System authentication and service logs
-- **Threats**: SSH brute force, privilege escalation attempts
-- **Usage**: `python aion.py analyze example_data/sample_logs/syslog_sample.log`
+- **`apache_access_sample.log`** - Apache access logs with attack patterns
+- **`nginx_access_sample.log`** - Nginx access logs 
+- **`syslog_sample.log`** - Linux system logs with authentication events
+- **`zeek_conn_sample.log`** - Network connection logs
 
 ### Large Test Files (Comprehensive Analysis)
-### `sample_logs/linux-2k.log`
-- **Format**: Linux syslog
-- **Size**: ~216 KB, 2,000 log entries
-- **Content**: Comprehensive system logs with multiple attack patterns
-- **Threats**: SSH brute force, system alerts, authentication failures
-- **Usage**: `python aion.py analyze example_data/sample_logs/linux-2k.log`
-
-### `sample_logs/apache-10k.log`
-- **Format**: Apache server log
-- **Size**: ~5.1 MB, 10,000+ log entries
-- **Content**: Large web server access logs
-- **Threats**: Various web attacks, reconnaissance, exploitation attempts
-- **Usage**: `python aion.py analyze example_data/sample_logs/apache-10k.log`
-
-### `sample_logs/access-10k.log`
-- **Format**: Apache access log
-- **Size**: ~4.9 MB, 10,000+ log entries
-- **Content**: Web server access logs with attack patterns
-- **Threats**: Directory traversal, SQL injection, XSS attempts
-- **Usage**: `python aion.py analyze example_data/sample_logs/access-10k.log`
+- **`linux-2k.log`** - 2,000 Linux system log entries (~216 KB)
+- **`apache-10k.log`** - 10,000+ Apache server log entries (~5.1 MB)
+- **`access-10k.log`** - 10,000+ access log entries (~3.1 MB)
 
 ## 🚀 Quick Start Examples
 
-### 1. Analyze Sample Logs
 ```bash
 # Quick test with small samples
-python aion.py analyze example_data/sample_logs/apache_access_sample.log
-python aion.py analyze example_data/sample_logs/syslog_sample.log
+python main.py analyze example_data/sample_logs/apache_access_sample.log
 
 # Comprehensive analysis with large files
-python aion.py analyze example_data/sample_logs/linux-2k.log
-python aion.py analyze example_data/sample_logs/apache-10k.log
-python aion.py analyze example_data/sample_logs/access-10k.log
+python main.py analyze example_data/sample_logs/linux-2k.log
 
 # Generate HTML report
-python aion.py analyze example_data/sample_logs/apache_access_sample.log --format html
-```
-
-### 2. Real-Time Monitoring
-```bash
-# Start monitoring with default settings
-python aion.py monitor
-
-# Custom monitoring interval
-python aion.py monitor --interval 60 --batch-size 500
-```
-
-### 3. Setup and Configuration
-```bash
-# Run initial setup
-python aion.py setup
-
-# Check system status
-curl http://localhost:9200
+python main.py analyze example_data/sample_logs/apache_access_sample.log --format html
 ```
 
 ## 📊 Expected Results
 
-When analyzing the sample logs, you should see:
+These sample files contain various security threats and attack patterns that LogShield AI will detect and analyze, including:
 
-### Apache Access Log Analysis
-- **Directory Traversal**: `../../../etc/passwd` attempts
-- **SQL Injection**: `' OR '1'='1` patterns
-- **XSS Attempts**: `<script>` tags in URLs
-- **Reconnaissance**: Admin panel and WordPress scans
-
-### Syslog Analysis
-- **SSH Brute Force**: Multiple failed login attempts
-- **Privilege Escalation**: Sudo usage patterns
-- **System Alerts**: Out of memory conditions
-- **Invalid Users**: Attempts with non-existent accounts
-
-## 🔧 Custom Log Formats
-
-AION supports various log formats:
-
-- **Apache/Nginx Access Logs**: Standard web server logs
-- **Linux Syslog**: System authentication and service logs
-- **JSON Logs**: Structured log data
-- **CSV Logs**: Comma-separated log data
-- **Custom Formats**: Line-by-line parsing with fallback
-
-## 📈 Performance Tips
-
-- **Large Files**: AION processes files in chunks for memory efficiency
-- **Multiple Files**: Use batch processing for multiple log files
-- **Real-Time**: Configure appropriate batch sizes for your log volume
-- **Storage**: Use `--cleanup` flag to remove processed data after analysis
-
-## 🛠️ Troubleshooting
-
-### Common Issues
-1. **File Not Found**: Ensure the log file path is correct
-2. **Permission Denied**: Check file read permissions
-3. **Elasticsearch Connection**: Ensure Elasticsearch is running
-4. **Memory Issues**: Process large files in smaller batches
-
-### Getting Help
-- Check the main README.md for detailed setup instructions
-- Review console output for specific error messages
-- Ensure all dependencies are installed correctly
+- SQL injection attempts
+- Cross-site scripting (XSS)
+- Directory traversal attacks
+- SSH brute force attempts
+- System authentication failures
+- Network anomalies

@@ -9,7 +9,7 @@ The fastest way to see the system in action is to analyze your own log files:
 
 ```bash
 # Try the sample logs
-python aion.py analyze example_data/sample_logs/apache_access_sample.log
+python main.py analyze example_data/sample_logs/apache_access_sample.log
 ```
 
 ### Real-Time Monitoring
@@ -17,7 +17,7 @@ For continuous monitoring of new logs:
 
 ```bash
 # Start real-time monitoring
-python aion.py monitor
+python main.py monitor
 ```
 
 ## 📋 What LogShield AI Does
@@ -35,9 +35,9 @@ python aion.py monitor
 3. **Incident Creation** - Automatically creates security incidents
 4. **Live Updates** - Provides real-time threat detection
 
-## 🏗️ Architecture Overview
+## 🏠️ Architecture Overview
 
-Currently uses a **2-tier detection pipeline**:
+LogShield AI uses a **multi-tier detection pipeline**:
 
 ### Tier 1: Rule-Based Detection
 - **Fast pattern matching** for known attack signatures
@@ -128,7 +128,7 @@ MAX_DEMO_LOGS=2000
 #### Option 1: Automated Setup (Recommended)
 ```bash
 # Run the automated setup script
-python aion.py setup
+python main.py setup
 ```
 
 #### Option 2: Manual Setup
@@ -147,48 +147,27 @@ cp .env.example .env
 curl http://localhost:9200
 
 # 5. Analyze your first log file
-python aion.py analyze examples/sample_logs/apache_access_sample.log
+python main.py analyze example_data/sample_logs/apache_access_sample.log
 ```
 
-## 📊 What LogShield AI Detects
+## 📊 Supported Log Types & Detections
 
-### 1. **Web Application Attacks**
+### **Web Application Logs** (Apache, Nginx)
 - **SQL Injection**: `' OR '1'='1`, UNION SELECT patterns
 - **Cross-Site Scripting (XSS)**: `<script>` tags, event handlers
 - **Directory Traversal**: `../../../etc/passwd` attempts
 - **Command Injection**: System command execution attempts
-- **SSRF**: Server-side request forgery patterns
+- **Web Scanners**: Automated bot detection
 
-### 2. **System Compromises**
+### **System Logs** (Linux Syslog)
 - **SSH Brute Force**: Multiple failed login attempts
 - **Privilege Escalation**: Sudo usage patterns
+- **Invalid Users**: Authentication bypass attempts
 - **Service Failures**: System service crashes and errors
-- **Authentication Bypass**: Invalid user attempts
 
-### 3. **Network Intrusions**
-- **Port Scanning**: Reconnaissance activities
-- **DDoS Patterns**: High-volume traffic anomalies
-- **Bot Traffic**: Automated scanner signatures
-- **Lateral Movement**: Internal network reconnaissance
-
-### 4. **Anomalous Behavior**
-- **Unusual Traffic Patterns**: Statistical anomalies
-- **Suspicious User Activity**: Abnormal access patterns
-- **Data Exfiltration**: Unusual data transfer patterns
-- **Policy Violations**: Security policy breaches
-
-## 🎯 Key Features
-
-### Real-Time Processing
-- **Continuous monitoring** of log streams
-- **Sub-second detection** for critical threats
-- **Automatic escalation** based on severity
-
-### Multi-Source Support
-- **Web Server Logs**: Apache, Nginx access logs
-- **System Logs**: Linux syslog, authentication logs
-- **Network Logs**: Netflow, firewall logs
-- **Application Logs**: Custom application events
+### **Network Logs** (Zeek, Generic)
+- **Connection Analysis**: Network flow patterns
+- **Anomaly Detection**: AI-powered network behavior analysis
 
 ### Intelligent Analysis
 - **False Positive Reduction**: ML models trained on real attack data
@@ -228,25 +207,25 @@ After running the demo, you'll get:
 ### Analyze Log Files
 ```bash
 # Basic analysis
-python aion.py analyze /var/log/apache2/access.log
+python main.py analyze /var/log/apache2/access.log
 
 # Generate HTML report
-python aion.py analyze /var/log/auth.log --format html
+python main.py analyze /var/log/auth.log --format html
 
 # Keep data in Elasticsearch for further analysis
-python aion.py analyze /var/log/nginx/access.log --keep-data
+python main.py analyze /var/log/nginx/access.log --keep-data
 
 # Clean up after analysis
-python aion.py analyze /var/log/syslog --cleanup
+python main.py analyze /var/log/syslog --cleanup
 ```
 
 ### Real-Time Monitoring
 ```bash
 # Start monitoring with default settings
-python aion.py monitor
+python main.py monitor
 
 # Custom monitoring interval and batch size
-python aion.py monitor --interval 60 --batch-size 500
+python main.py monitor --interval 60 --batch-size 500
 ```
 
 ### Next Steps
@@ -291,7 +270,7 @@ python aion.py monitor --interval 60 --batch-size 500
 
 ```
 aion/
-├── aion.py                    # Main CLI interface
+├── main.py                    # Main CLI interface
 ├── core/                      # Core security analysis components
 │   ├── orchestrator.py        # Main orchestration logic
 │   ├── tier1_rules.py         # Rule-based detection
@@ -386,3 +365,7 @@ curl -X POST "http://localhost:5601/api/saved_objects/_import" \
 
 Files:
 - `kibana/saved_objects.ndjson`
+
+---
+
+**Ready to secure your infrastructure? Run `python main.py analyze example_data/sample_logs/apache_access_sample.log` and see LogShield AI detect threats in your logs!** 🔒

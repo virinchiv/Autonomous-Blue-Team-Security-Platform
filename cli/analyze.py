@@ -268,15 +268,15 @@ def generate_markdown_report(analysis_results: dict, processing_stats: dict, log
         if severity in severity_counts:
             severity_counts[severity] += 1
     
-    report = f"""# AION Security Intelligence Analysis Report
-**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    report = f"""# LogShield AI Security Intelligence Report
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **Analysis Mode:** File-based log analysis
 
 ---
 
 ## 🎯 Executive Summary
 
-This analysis processed **{total_logs}** logs from the file `{logfile_path}` and identified **{len(incidents)}** security incidents requiring attention.
+LogShield AI processed **{total_logs}** logs from `{logfile_path}` and identified **{len(incidents)}** security incidents requiring immediate attention.
 
 ### 📊 Incident Statistics
 - **Total Incidents:** {len(incidents)}
@@ -286,14 +286,13 @@ This analysis processed **{total_logs}** logs from the file `{logfile_path}` and
 
 ### 🔍 Processing Statistics
 - **Tier 1 Threats Detected:** {tier1_threats}
-- **LLM-Detected Threats:** {llm_threats}
+- **LLM-Enhanced Threats:** {llm_threats}
 - **Total Threats Processed:** {total_threats}
 - **Benign Logs:** {benign_logs}
-- **Tier 3 Escalations:** {tier3_escalations}
 
 ---
 
-## 🚨 Security Incidents by Classification
+## 🚨 Security Incidents
 
 """
     
@@ -304,15 +303,16 @@ This analysis processed **{total_logs}** logs from the file `{logfile_path}` and
             for incident in classification_incidents:
                 incident_id = incident.get('incident_id', 'Unknown')
                 severity = incident.get('severity', 'Unknown')
-                source_ips = incident.get('incident_metadata', {}).get('source_ips', [])
-                event_count = incident.get('incident_metadata', {}).get('event_count', 0)
-                time_span = incident.get('incident_metadata', {}).get('time_span', 'N/A')
-                involved_hosts = incident.get('incident_metadata', {}).get('involved_hosts', [])
-                threat_rules = incident.get('incident_metadata', {}).get('threat_rules', [])
+                event_count = incident.get('event_count', 0)
                 confidence_score = incident.get('confidence_score', 0.0)
+                involved_hosts = incident.get('involved_hosts', [])
+                threat_rules = incident.get('threat_rules_triggered', [])
+                source_ip = incident.get('source_ip', None)
+                first_event = incident.get('first_event_at', 'N/A')
+                last_event = incident.get('last_event_at', 'N/A')
                 
-                # Format source IPs
-                source_ip_str = ', '.join(source_ips) if source_ips else 'Unknown'
+                # Format time span
+                time_span = f"{first_event} to {last_event}" if first_event != 'N/A' and last_event != 'N/A' else 'N/A'
                 
                 # Format involved hosts
                 hosts_str = ', '.join(involved_hosts) if involved_hosts else 'None'
@@ -321,10 +321,27 @@ This analysis processed **{total_logs}** logs from the file `{logfile_path}` and
                 rules_str = ', '.join(threat_rules) if threat_rules else 'Unknown'
                 
                 report += f"#### **{incident_id}** (Severity: {severity})\n"
-                report += f"- **Source IP:** `{source_ip_str}`\n"
+                
+                # Show appropriate fields based on log type and available data
+                if processing_stats.get('log_type') in ['linux_syslog', 'syslog']:
+                    # For syslog, show host and process info instead of source IP
+                    if involved_hosts:
+                        report += f"- **Affected Host(s):** `{hosts_str}`\n"
+                    if source_ip and source_ip != 'unknown':
+                        report += f"- **Source IP:** `{source_ip}`\n"
+                    else:
+                        report += f"- **Source:** System logs (no external IP)\n"
+                else:
+                    # For web logs, show source IP
+                    if source_ip and source_ip != 'unknown':
+                        report += f"- **Source IP:** `{source_ip}`\n"
+                    else:
+                        report += f"- **Source IP:** Unknown\n"
+                    if involved_hosts:
+                        report += f"- **Involved Hosts:** {hosts_str}\n"
+                
                 report += f"- **Event Count:** {event_count} events\n"
                 report += f"- **Time Span:** {time_span}\n"
-                report += f"- **Involved Hosts:** {hosts_str}\n"
                 report += f"- **Threat Rules:** {rules_str}\n"
                 report += f"- **Confidence Score:** {confidence_score:.2f}\n\n"
                 
@@ -355,29 +372,35 @@ This analysis processed **{total_logs}** logs from the file `{logfile_path}` and
         report += "The analyzed logs did not contain any detectable security threats.\n\n"
     
     # Add methodology section
-    report += """## 🔧 Methodology
+    detected_rules = []
+    if incidents:
+        all_rules = []
+        for incident in incidents:
+            rules = incident.get('threat_rules_triggered', [])
+            if isinstance(rules, list):
+                all_rules.extend(rules)
+            elif isinstance(rules, str):
+                all_rules.append(rules)
+        detected_rules = list(set(all_rules))
+    
+    report += f"""## 🔧 Methodology
 
-This analysis utilized the AION incident-centric security orchestration workflow:
+LogShield AI utilized a multi-tier threat detection and correlation workflow:
 
-### 1. **Tier 1 Triage**
-- Processed all logs through predefined threat detection rules
+### 1. **Rule-Based Detection**
+- Applied {len(detected_rules)} active threat detection rules
 - Classified logs as THREAT, BENIGN, or UNCLASSIFIED
-- Identified known threat patterns using regex-based rules
+- Identified known attack patterns: {', '.join(detected_rules[:3]) if detected_rules else 'None detected'}
 
-### 2. **Tier 3 LLM Analysis**
-- Escalated unclassified logs to AI analysis
-- LLM identified additional threats using natural language processing
+### 2. **AI-Enhanced Analysis**
+- LLM analyzed {tier3_escalations} unclassified logs for sophisticated threats
 - Applied confidence scoring to minimize false positives
+- Enhanced threat context and impact assessment
 
 ### 3. **Incident Correlation**
-- Grouped related threats by source IP and attack pattern
-- Applied correlation thresholds to create coherent incidents
-- Generated distinct security incidents
-
-### 4. **Comprehensive Analysis**
-- Each incident enriched with AI-powered analysis
-- Generated executive summaries and attack timelines
-- Provided actionable remediation recommendations
+- Grouped {total_threats} related threats by source, target, and attack pattern
+- Applied correlation thresholds to create {len(incidents)} coherent incidents
+- Generated actionable security incidents with remediation steps
 
 ---
 
@@ -386,77 +409,90 @@ This analysis utilized the AION incident-centric security orchestration workflow
 """
     
     if incidents:
-        # Calculate key findings
-        total_events = sum(incident.get('incident_metadata', {}).get('event_count', 0) for incident in incidents)
+        # Calculate accurate key findings
+        total_events = sum(incident.get('event_count', 0) for incident in incidents)
         avg_events = total_events / len(incidents) if incidents else 0
-        max_confidence = max(incident.get('confidence_score', 0) for incident in incidents) if incidents else 0
+        max_confidence = max((incident.get('confidence_score', 0.0) for incident in incidents), default=0.0)
         
-        # Find most common attack type
-        attack_types = {}
+        # Get most common classification
+        most_common = max(incident_classifications.items(), key=lambda x: len(x[1]))[0] if incident_classifications else "None"
+        
+        # Calculate actual time range from incidents
+        all_times = []
         for incident in incidents:
-            classification = incident.get('classification', 'Unknown')
-            attack_types[classification] = attack_types.get(classification, 0) + 1
+            first_time = incident.get('first_event_at')
+            last_time = incident.get('last_event_at')
+            if first_time and first_time != 'N/A':
+                all_times.append(first_time)
+            if last_time and last_time != 'N/A' and last_time != first_time:
+                all_times.append(last_time)
         
-        most_common = max(attack_types.items(), key=lambda x: x[1]) if attack_types else ('None', 0)
+        time_range = "N/A"
+        if all_times:
+            try:
+                # Parse timestamps and find range
+                parsed_times = []
+                for time_str in all_times:
+                    if isinstance(time_str, str):
+                        # Handle different timestamp formats
+                        for fmt in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S%z', '%Y-%m-%dT%H:%M:%S+00:00']:
+                            try:
+                                clean_time = time_str.replace('+00:00', '').replace('Z', '')
+                                parsed_times.append(datetime.strptime(clean_time, fmt.replace('%z', '').replace('+00:00', '')))
+                                break
+                            except ValueError:
+                                continue
+                
+                if parsed_times:
+                    min_time = min(parsed_times)
+                    max_time = max(parsed_times)
+                    if min_time == max_time:
+                        time_range = f"{min_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                    else:
+                        time_range = f"{min_time.strftime('%Y-%m-%d %H:%M:%S')} to {max_time.strftime('%Y-%m-%d %H:%M:%S')}"
+            except Exception:
+                time_range = "N/A"
         
-        # Get time range
-        time_ranges = []
-        for incident in incidents:
-            time_span = incident.get('incident_metadata', {}).get('time_span', '')
-            if time_span and ' to ' in time_span:
-                time_ranges.append(time_span)
-        
-        time_range_str = time_ranges[0] if time_ranges else 'N/A'
-        
-        report += f"""- **Most Common Attack Type:** {most_common[0]} ({most_common[1]} incidents)
-- **Average Events per Incident:** {avg_events:.1f}
-- **Highest Confidence Score:** {max_confidence:.2f}
-- **Time Range Analyzed:** {time_range_str}
-
-"""
+        report += f"- **Primary Attack Type:** {most_common} ({len(incident_classifications.get(most_common, []))} incidents)\n"
+        report += f"- **Average Events per Incident:** {avg_events:.1f}\n"
+        report += f"- **Highest Confidence Score:** {max_confidence:.2f}\n"
+        report += f"- **Analysis Time Range:** {time_range}\n"
     else:
         report += "- **No threats detected in the analyzed logs**\n\n"
     
     # Add recommendations section
-    report += """## 🎯 Recommendations
+    report += f"""## 🎯 Immediate Actions Required
 
-Based on the analysis of the log file:
+Based on the security incidents identified:
 
-1. **Immediate Actions:**
-   - Review all High and Medium severity incidents
-   - Implement recommended remediation steps
-   - Monitor identified source IPs for continued activity
+1. **High Priority ({severity_counts['High']} incidents):**
+   - Investigate and contain all high-severity incidents immediately
+   - Block malicious source IPs at firewall level
+   - Review system access logs for signs of compromise
 
-2. **System Improvements:**
-   - Consider adjusting correlation thresholds based on findings
-   - Review Tier 1 rules for potential enhancements
-   - Monitor LLM analysis accuracy and adjust confidence thresholds
+2. **Medium Priority ({severity_counts['Medium']} incidents):**
+   - Implement recommended security controls
+   - Monitor identified attack patterns
+   - Update detection rules based on new threat indicators
 
-3. **Ongoing Monitoring:**
-   - Deploy the real-time service for continuous monitoring
-   - Set up alerts for new incidents in the `aion-incidents` index
-   - Regular review of incident trends and patterns
+3. **Ongoing Security Posture:**
+   - Deploy LogShield AI for continuous monitoring
+   - Set up real-time alerting for similar attack patterns
+   - Regular security assessment and rule tuning
 
 ---
 
-## 📋 Technical Details
+## 📋 Analysis Summary
 
-"""
-    
-    from core.orchestrator import INCIDENTS_INDEX
-    
-    report += f"""- **Log File:** `{logfile_path}`
-- **Elasticsearch Index:** `{UNIFIED_LOGS_INDEX}`
-- **Incidents Index:** `{INCIDENTS_INDEX}`
-- **Processing Mode:** File-based Analysis
-- **Logs Processed:** {total_logs}
+- **Source:** `{logfile_path}`
 - **Log Type:** {processing_stats.get('log_type', 'Unknown')}
-- **File Size:** {processing_stats.get('file_size', 0)} bytes
-- **Report Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+- **Logs Processed:** {total_logs}
+- **File Size:** {processing_stats.get('file_size', 'Unknown')} bytes
+- **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ---
 
-*This report was generated by the AION Autonomous Blue Team Agent incident-centric security orchestration system.*
+*Report generated by LogShield AI - Intelligent Log Analysis & Threat Detection Platform*
 """
     
     return report

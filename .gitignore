@@ -95,6 +95,7 @@ tmp/
 # Security reports (generated)
 security_intelligence_*.md
 *_report_*.md
+aion_analysis_report_*.markdown
 
 # Docker
 .dockerignore

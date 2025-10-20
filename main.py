@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AION - Autonomous Blue Team Security Platform
+LogShield AI - Intelligent Log Analysis & Threat Detection
 Main CLI interface for log analysis and real-time monitoring.
 """
 
@@ -14,8 +14,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def setup_command(args):
     """Run the setup process."""
-    print("🔧 AION Setup")
-    print("=" * 40)
+    print("🔧 LogShield AI Setup")
+    print("=" * 50)
     
     # Import and run the setup script
     try:
@@ -25,7 +25,7 @@ def setup_command(args):
             print("\n✅ Setup completed successfully!")
             print("\n📝 Next steps:")
             print("1. Edit .env file and add your Groq API key")
-            print("2. Run: python aion.py analyze /path/to/your/logfile.log")
+            print("2. Run: python main.py analyze /path/to/your/logfile.log")
         else:
             print("\n❌ Setup failed. Please check the errors above.")
             sys.exit(1)
@@ -37,7 +37,7 @@ def analyze_command(args):
     """Run log analysis mode."""
     if not args.logfile:
         print("❌ Error: Please specify a log file to analyze")
-        print("Usage: python aion.py analyze /path/to/logfile.log")
+        print("Usage: python logshield_ai.py analyze /path/to/logfile.log")
         sys.exit(1)
     
     logfile_path = Path(args.logfile)
@@ -45,7 +45,7 @@ def analyze_command(args):
         print(f"❌ Error: Log file not found: {logfile_path}")
         sys.exit(1)
     
-    print("🔍 AION Log Analysis Mode")
+    print("🔍 LogShield AI Analysis Mode")
     print("=" * 50)
     print(f"📁 Analyzing log file: {logfile_path}")
     print("=" * 50)
@@ -66,7 +66,7 @@ def analyze_command(args):
 
 def monitor_command(args):
     """Run real-time monitoring mode."""
-    print("🚀 AION Real-Time Monitoring Mode")
+    print("👁️ LogShield AI Real-Time Monitoring")
     print("=" * 50)
     print("This mode continuously monitors Elasticsearch for new logs")
     print("and processes them in real-time.")
@@ -117,13 +117,13 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python aion.py setup                                    # Initial setup
-  python aion.py analyze /var/log/apache2/access.log     # Analyze log file
-  python aion.py analyze /var/log/auth.log --keep-data   # Keep data in ES
-  python aion.py monitor                                  # Real-time monitoring
-  python aion.py monitor --interval 60                   # Custom interval
-  python aion.py clear                                    # Clear all ES data
-  python aion.py clear --force                           # Clear without confirmation
+  python main.py setup                                    # Initial setup
+  python main.py analyze /var/log/apache2/access.log     # Analyze log file
+  python main.py analyze /var/log/auth.log --keep-data   # Keep data in ES
+  python main.py monitor                                  # Real-time monitoring
+  python main.py monitor --interval 60                   # Custom interval
+  python main.py clear                                    # Clear all ES data
+  python main.py clear --force                           # Clear without confirmation
 
 For more information, visit: https://github.com/your-repo/aion
         """

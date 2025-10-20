@@ -192,7 +192,7 @@ def display_final_stats(cycle_count: int, total_logs: int, total_incidents: int)
     print(f"\n📋 Next Steps:")
     print(f"   1. Review incidents in Elasticsearch index: aion-incidents")
     print(f"   2. Access Kibana at http://localhost:5601 for visualization")
-    print(f"   3. Run 'python aion.py analyze' to process additional log files")
+    print(f"   3. Run 'python main.py analyze' to process additional log files")
     print(f"   4. Configure log ingestion pipeline for continuous monitoring")
 
 
