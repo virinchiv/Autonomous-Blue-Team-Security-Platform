@@ -12,8 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Import your custom modules ---
-from .tier1_rules import THREAT_RULES, BENIGN_RULES
-from .tier3_llm import analyze_log_with_llm, should_escalate_to_llm, calculate_confidence_score, generate_incident_report
+from .rules_engine import THREAT_RULES, BENIGN_RULES
+from .llm_analyzer import analyze_log_with_llm, should_escalate_to_llm, calculate_confidence_score, generate_incident_report
 
 # --- Configuration from Environment Variables ---
 # Elasticsearch Configuration

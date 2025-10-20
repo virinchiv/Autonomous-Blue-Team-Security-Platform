@@ -231,7 +231,7 @@ python main.py monitor --interval 60 --batch-size 500
 ### Next Steps
 1. **Review Reports**: Check generated security intelligence reports
 2. **Explore Kibana**: Visualize incidents at http://localhost:5601
-3. **Customize Rules**: Modify detection rules in `core/tier1_rules.py`
+3. **Customize Rules**: Modify detection rules in `core/rules_engine.py`
 4. **Process More Logs**: Analyze additional log files
 5. **Set Up Monitoring**: Configure log ingestion for real-time monitoring
 
@@ -269,23 +269,40 @@ python main.py monitor --interval 60 --batch-size 500
 ## 📁 Project Structure
 
 ```
-aion/
+LogShield-AI/
 ├── main.py                    # Main CLI interface
+├── setup.py                   # Package setup and installation
+├── requirements.txt           # Python dependencies
+├── LICENSE                    # Project license
+├── .env.example              # Environment configuration template
+├── .gitignore                # Git ignore patterns
 ├── core/                      # Core security analysis components
 │   ├── orchestrator.py        # Main orchestration logic
-│   ├── tier1_rules.py         # Rule-based detection
-│   ├── tier3_llm.py          # AI-powered analysis
+│   ├── rules_engine.py        # Rule-based detection
+│   ├── llm_analyzer.py        # AI-powered analysis
 │   └── ingestion/            # Log parsing and normalization
+│       ├── parser.py          # Log format detection and parsing
+│       ├── normalizer.py      # ECS format normalization
+│       └── flow_aggregator.py # Network flow aggregation
 ├── cli/                       # Command-line interface modules
 │   ├── analyze.py            # Log analysis mode
 │   └── monitor.py            # Real-time monitoring mode
 ├── utils/                     # Utility functions
 │   └── log_processor.py      # Enhanced log processing
-├── examples/                  # Sample data and examples
+├── example_data/              # Sample data and examples
+│   ├── README.md             # Example usage documentation
 │   └── sample_logs/          # Sample log files for testing
-├── .env.example              # Environment configuration template
+├── elasticsearch/             # Elasticsearch configuration
+│   ├── templates/            # Index templates
+│   └── ilm/                  # Index lifecycle management policies
+├── kibana/                    # Kibana dashboards and visualizations
+│   └── saved_objects.ndjson  # Kibana saved objects
+├── filebeat/                  # Log shipping configuration
+│   └── filebeat.yml          # Filebeat configuration
 ├── docker-compose.yml        # Elasticsearch and Kibana setup
-└── requirements.txt          # Python dependencies
+├── docker-compose.secure.yml # Secure Elasticsearch setup
+├── clear_elasticsearch.py    # Utility to clear ES data
+└── clear_es.sh               # Shell script to clear ES data
 ```
 
 ## 🤝 Contributing

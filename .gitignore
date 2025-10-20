@@ -86,6 +86,9 @@ coverage.xml
 .tox/
 tests/
 
+# Development files (not ready for public)
+core/tier2.py
+
 # Temporary files
 *.tmp
 *.temp
